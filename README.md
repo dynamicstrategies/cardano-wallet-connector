@@ -17,7 +17,11 @@ Implements the CIP30: https://cips.cardano.org/cips/cip30/
 
 Nami implementation: https://github.com/Berry-Pool/nami-wallet
 
-Uses the cardano-serialization-lib: https://docs.cardano.org/cardano-components/cardano-serialization-lib
+Uses the cardano-serialization-lib:
+Old documentation: https://docs.cardano.org/cardano-components/cardano-serialization-lib
+Up to date docs: https://github.com/Emurgo/cardano-serialization-lib/blob/master/rust/pkg/cardano_serialization_lib.js.flow
 
 Class references for the serialization lib: https://input-output-hk.github.io/cardano-js-sdk/modules/_cardano_sdk_core.CSL.html
+
+Example 1: https://github.com/MartifyLabs/martify.contracts
 

@@ -1,26 +1,33 @@
 import React from 'react'
+import { Tab, Tabs } from "@blueprintjs/core";
+import "../node_modules/@blueprintjs/core/lib/css/blueprint.css";
+import "../node_modules/normalize.css/normalize.css";
 import {
     Address,
+    MultiAsset,
+    Assets,
+    ScriptHash,
+    AssetName,
     TransactionUnspentOutput,
+    TransactionUnspentOutputs,
     TransactionOutput,
     Value,
     TransactionBuilder,
+    TransactionBuilderConfigBuilder,
+    TransactionOutputBuilder,
     LinearFee,
     BigNum,
-    hash_transaction,
+    BigInt,
     TransactionHash,
     TransactionInput,
-    ByronAddress,
-    PublicKey,
-    PrivateKey,
-    Bip32PublicKey,
     TransactionWitnessSet,
-    Transaction
+    Transaction,
+    PlutusData,
+    hash_transaction,
+    hash_plutus_data
 } from "@emurgo/cardano-serialization-lib-asmjs"
 let Buffer = require('buffer/').Buffer
 
-const MAX_VALUE_SIZE = 50000000000;
-const MAX_TX_SIZE = 16384;
 
 export default class App extends React.Component
 {
@@ -29,6 +36,7 @@ export default class App extends React.Component
         super(props);
 
         this.state = {
+            selectedTabId: "1",
             walletFound: false,
             walletIsEnabled: false,
             walletName: undefined,
@@ -47,19 +55,30 @@ export default class App extends React.Component
             txBodyCborHex_signed: "",
             submittedTxHash: ""
 
-
         }
 
         this.API = undefined;
 
-        this.minFeeA = '44';
-        this.minFeeB = '155381';
-        this.minUTxOValue = '1000000';
-        this.poolDeposit = '500000000';
-        this.keyDeposit= '2000000';
+
+        this.protocolParams = {
+            linearFee: {
+                minFeeA: "44",
+                minFeeB: "155381",
+            },
+            minUtxo: "34482",
+            poolDeposit: "500000000",
+            keyDeposit: "2000000",
+            maxValSize: 5000,
+            maxTxSize: 16384,
+            priceMem: 0.0577,
+            priceStep: 0.0000721,
+            coinsPerUtxoWord: "34482",
+        }
 
 
     }
+
+    handleTabId = (tabId) => this.setState({selectedTabId: tabId})
 
     checkIfWalletFound = () => {
         const walletFound = !!window?.cardano?.ccvault
@@ -87,6 +106,7 @@ export default class App extends React.Component
             this.API = await window.cardano.ccvault.enable();
             await this.checkIfWalletEnabled();
             await this.getNetworkId();
+
 
         } catch (err) {
             console.log(err)
@@ -133,7 +153,8 @@ export default class App extends React.Component
                     txid: txid,
                     txindx: txindx,
                     amount: amount,
-                    str: `${txid} #${txindx} = ${amount}`
+                    str: `${txid} #${txindx} = ${amount}`,
+                    TransactionUnspentOutput: utxo
                 }
                 Utxos.push(obj);
                 // console.log(`utxo: ${str}`)
@@ -161,8 +182,6 @@ export default class App extends React.Component
             const raw = await this.API.getChangeAddress();
             const changeAddress = Address.from_bytes(Buffer.from(raw, "hex")).to_bech32()
             this.setState({changeAddress})
-
-
         } catch (err) {
             console.log(err)
         }
@@ -214,66 +233,6 @@ export default class App extends React.Component
         }
     }
 
-    buildTransaction = async () => {
-
-        const txBuilder = TransactionBuilder.new(
-            // all of these are taken from the genesis settings
-            // linear fee parameters (a*size + b)
-            LinearFee.new(BigNum.from_str(this.minFeeA), BigNum.from_str(this.minFeeB)),
-            // minimum utxo value
-            BigNum.from_str(this.minUTxOValue),
-            // pool deposit
-            BigNum.from_str(this.poolDeposit),
-            // key deposit
-            BigNum.from_str(this.keyDeposit),
-            MAX_VALUE_SIZE,
-            MAX_TX_SIZE
-        );
-
-
-        txBuilder.add_input(
-            Address.from_bech32("addr_test1qrrcpzsemawptnru8k865mvq0awd7slp2eaeg4qa0xjyjdyc85y96hdkqtarg95gewuezjvkw8zt530tnmglhrzccddsannl6x"),
-            TransactionInput.new(
-                TransactionHash.from_bytes(
-                    Buffer.from("d641394b01c67d4f121b73973cfe90c34d6fc0f3f77723852271baad30585db5", "hex")
-                ), // tx hash
-                0, // index
-            ),
-            Value.new(BigNum.from_str('1000000000'))
-        )
-
-
-        // Output address
-        const shelleyOutputAddress = Address.from_bech32("addr_test1qrt7j04dtk4hfjq036r2nfewt59q8zpa69ax88utyr6es2ar72l7vd6evxct69wcje5cs25ze4qeshejy828h30zkydsu4yrmm");
-        // Change address
-        // const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress)
-        const shelleyChangeAddress = Address.from_bech32("addr_test1qz98zdc8nv3h5ydaqwyaxynz75mzjhdtydgags4f9xjjpm5c85y96hdkqtarg95gewuezjvkw8zt530tnmglhrzccddskxtxye")
-
-        txBuilder.add_output(
-            TransactionOutput.new(
-                shelleyOutputAddress,
-                Value.new(BigNum.from_str('1000000'))
-            ),
-        );
-
-        // set the time to live - the absolute slot value before the tx becomes invalid
-        txBuilder.set_ttl(49666886);
-
-        // calculate the min fee required and send any change to an address
-        txBuilder.add_change_if_needed(shelleyChangeAddress)
-
-        // once the transaction is ready, we build it to get the tx body without witnesses
-        const txBody = txBuilder.build();
-        const txBodyCborHex_unsigned = Buffer.from(txBody.to_bytes(), "utf8").toString("hex");
-        this.setState({txBodyCborHex_unsigned, txBody})
-
-        // const txHash = hash_transaction(txBody);
-
-        // console.log(txBody)
-        // console.log(txHash.to_bech32("hash_"))
-
-    }
-
     signTransaction = async () => {
         try{
             const txBodyCborHex_signed = await this.API.signTx(this.state.txBodyCborHex_unsigned);
@@ -298,6 +257,264 @@ export default class App extends React.Component
 
     }
 
+    initTransactionBuilder = async () => {
+
+        const txBuilder = TransactionBuilder.new(
+            TransactionBuilderConfigBuilder.new()
+                .fee_algo(LinearFee.new(BigNum.from_str(this.protocolParams.linearFee.minFeeA), BigNum.from_str(this.protocolParams.linearFee.minFeeB)))
+                .pool_deposit(BigNum.from_str(this.protocolParams.poolDeposit))
+                .key_deposit(BigNum.from_str(this.protocolParams.keyDeposit))
+                .coins_per_utxo_word(BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+                .max_value_size(this.protocolParams.maxValSize)
+                .max_tx_size(this.protocolParams.maxTxSize)
+                .build()
+        );
+
+        return txBuilder
+    }
+
+    getTxUnspentOutputs = async () => {
+        let txOutputs = TransactionUnspentOutputs.new()
+        for (const utxo of this.state.Utxos) {
+            txOutputs.add(utxo.TransactionUnspentOutput)
+        }
+        return txOutputs
+    }
+
+
+
+    buildSendADATransaction = async () => {
+
+        const txBuilder = await this.initTransactionBuilder();
+
+
+        // Output address - the main output address where you want to send the funds
+        const shelleyOutputAddress = Address.from_bech32("addr_test1qrt7j04dtk4hfjq036r2nfewt59q8zpa69ax88utyr6es2ar72l7vd6evxct69wcje5cs25ze4qeshejy828h30zkydsu4yrmm");
+        // Change address - YOUR address where you want to receive the change from the transaction
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress)
+
+        txBuilder.add_output(
+            TransactionOutput.new(
+                shelleyOutputAddress,
+                Value.new(BigNum.from_str('1800000'))
+            ),
+        );
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 0)
+
+
+        // set the time to live - the absolute slot value before the tx becomes invalid
+        txBuilder.set_ttl(51821456);
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+        const txBodyCborHex_unsigned = Buffer.from(txBody.to_bytes(), "utf8").toString("hex");
+        this.setState({txBodyCborHex_unsigned, txBody})
+
+    }
+
+
+    buildSendTokenTransaction = async () => {
+
+        const txBuilder = await this.initTransactionBuilder();
+
+        // Output address - the main output address where you want to send the funds
+        const shelleyOutputAddress = Address.from_bech32("addr_test1qrt7j04dtk4hfjq036r2nfewt59q8zpa69ax88utyr6es2ar72l7vd6evxct69wcje5cs25ze4qeshejy828h30zkydsu4yrmm");
+        // Change address - YOUR address where you want to receive the change from the transaction
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress)
+
+
+        let txOutputBuilder = TransactionOutputBuilder.new();
+        txOutputBuilder = txOutputBuilder.with_address(shelleyOutputAddress);
+        txOutputBuilder = txOutputBuilder.next();
+
+        let multiAsset = MultiAsset.new();
+        let assets = Assets.new()
+        assets.insert(
+            AssetName.new(Buffer.from("4c494645", "hex")), // Asset Name
+            BigNum.from_str("5") // How much to send
+        );
+        multiAsset.insert(
+            ScriptHash.from_bytes(Buffer.from("ae02017105527c6c0c9840397a39cc5ca39fabe5b9998ba70fda5f2f", "hex")), // PolicyID
+            assets
+        );
+
+        txOutputBuilder = txOutputBuilder.with_asset_and_min_required_coin(multiAsset, BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+        const txOutput = txOutputBuilder.build();
+
+        txBuilder.add_output(txOutput)
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 2)
+
+
+        // set the time to live - the absolute slot value before the tx becomes invalid
+        txBuilder.set_ttl(51821456);
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+        const txBodyCborHex_unsigned = Buffer.from(txBody.to_bytes(), "utf8").toString("hex");
+        this.setState({txBodyCborHex_unsigned, txBody})
+
+    }
+
+
+
+    buildSendAdaToPlutusScript = async () => {
+
+        const txBuilder = await this.initTransactionBuilder();
+
+        // Output address - the main output address where you want to send the funds
+        const ScriptAddress = Address.from_bech32("addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8");
+        // Change address - YOUR address where you want to receive the change from the transaction
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress)
+
+
+        let txOutputBuilder = TransactionOutputBuilder.new();
+        txOutputBuilder = txOutputBuilder.with_address(ScriptAddress);
+        const dataHash = hash_plutus_data(PlutusData.new_integer(BigInt.from_str("12345678")))
+        txOutputBuilder = txOutputBuilder.with_data_hash(dataHash)
+
+        txOutputBuilder = txOutputBuilder.next();
+
+        txOutputBuilder = txOutputBuilder.with_value(Value.new(BigNum.from_str('6550000')))
+        const txOutput = txOutputBuilder.build();
+
+        txBuilder.add_output(txOutput)
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 0)
+
+
+        // set the time to live - the absolute slot value before the tx becomes invalid
+        txBuilder.set_ttl(51821456);
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+        const txBodyCborHex_unsigned = Buffer.from(txBody.to_bytes(), "utf8").toString("hex");
+        this.setState({txBodyCborHex_unsigned, txBody})
+    }
+
+    buildSendTokenToPlutusScript = async () => {
+
+        const txBuilder = await this.initTransactionBuilder();
+
+        // Output address - the main output address where you want to send the funds
+        const ScriptAddress = Address.from_bech32("addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8");
+        // Change address - YOUR address where you want to receive the change from the transaction
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress)
+
+
+        let txOutputBuilder = TransactionOutputBuilder.new();
+        txOutputBuilder = txOutputBuilder.with_address(ScriptAddress);
+        const dataHash = hash_plutus_data(PlutusData.new_integer(BigInt.from_str("12345678")))
+        txOutputBuilder = txOutputBuilder.with_data_hash(dataHash)
+
+        txOutputBuilder = txOutputBuilder.next();
+
+        let multiAsset = MultiAsset.new();
+        let assets = Assets.new()
+        assets.insert(
+            AssetName.new(Buffer.from("4c494645", "hex")), // Asset Name
+            BigNum.from_str("1") // How much to send
+        );
+        multiAsset.insert(
+            ScriptHash.from_bytes(Buffer.from("ae02017105527c6c0c9840397a39cc5ca39fabe5b9998ba70fda5f2f", "hex")), // PolicyID
+            assets
+        );
+
+        txOutputBuilder = txOutputBuilder.with_asset_and_min_required_coin(multiAsset, BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+
+        const txOutput = txOutputBuilder.build();
+
+        txBuilder.add_output(txOutput)
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 3)
+
+
+        // set the time to live - the absolute slot value before the tx becomes invalid
+        txBuilder.set_ttl(51821456);
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+        const txBodyCborHex_unsigned = Buffer.from(txBody.to_bytes(), "utf8").toString("hex");
+        this.setState({txBodyCborHex_unsigned, txBody})
+    }
+
+    buildRedeemFromPlutusScript = async () => {
+
+        const txBuilder = await this.initTransactionBuilder();
+
+        // Output address - the main output address where you want to send the funds
+        const ScriptAddress = Address.from_bech32("addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8");
+        // Change address - YOUR address where you want to receive the change from the transaction
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress)
+
+
+        let txOutputBuilder = TransactionOutputBuilder.new();
+        txOutputBuilder = txOutputBuilder.with_address(ScriptAddress);
+        const dataHash = hash_plutus_data(PlutusData.new_integer(BigInt.from_str("12345678")))
+        txOutputBuilder = txOutputBuilder.with_data_hash(dataHash)
+
+        txOutputBuilder = txOutputBuilder.next();
+
+        let multiAsset = MultiAsset.new();
+        let assets = Assets.new()
+        assets.insert(
+            AssetName.new(Buffer.from("4c494645", "hex")), // Asset Name
+            BigNum.from_str("1") // How much to send
+        );
+        multiAsset.insert(
+            ScriptHash.from_bytes(Buffer.from("ae02017105527c6c0c9840397a39cc5ca39fabe5b9998ba70fda5f2f", "hex")), // PolicyID
+            assets
+        );
+
+        txOutputBuilder = txOutputBuilder.with_asset_and_min_required_coin(multiAsset, BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+
+        const txOutput = txOutputBuilder.build();
+
+        txBuilder.add_output(txOutput)
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 3)
+
+
+        // set the time to live - the absolute slot value before the tx becomes invalid
+        txBuilder.set_ttl(51821456);
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+        const txBodyCborHex_unsigned = Buffer.from(txBody.to_bytes(), "utf8").toString("hex");
+        this.setState({txBodyCborHex_unsigned, txBody})
+    }
+
 
 
     async componentDidMount() {
@@ -310,9 +527,11 @@ export default class App extends React.Component
         return (
             <div style={{margin: "20px"}}>
 
+
+
                 <h2>Boilerplate for CCVault DApp connector</h2>
                 <p>{`Wallet Found: ${this.state.walletFound}`}</p>
-                <button style={{padding: "10px"}} onClick={this.enableWallet}>Connect to Wallet</button>
+                <button style={{padding: "10px"}} onClick={this.refreshData}>Connect to Wallet</button>
 
                 <p>{`Wallet Connected: ${this.state.walletIsEnabled}`}</p>
                 <p>{`Wallet API version: ${this.state.walletAPIVersion}`}</p>
@@ -325,13 +544,51 @@ export default class App extends React.Component
                 <p>{`Staking Address: ${this.state.rewardAddress}`}</p>
                 <p>{`Used Address: ${this.state.usedAddress}`}</p>
                 <hr/>
-                <h2>Transaction Builder</h2>
-                <button style={{padding: "10px"}} onClick={this.buildTransaction}>1. Build Transaction</button>
+
+                <Tabs id="TabsExample" vertical={true} onChange={this.handleTabId} selectedTabId={this.state.selectedTabId}>
+                    <Tab id="1" title="1. Send ADA to Address" panel={
+                        <div>
+                            <h2>Send ADA - Transaction Builder</h2>
+                            <button style={{padding: "10px"}} onClick={this.buildSendADATransaction}>1. Build Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.signTransaction}>2. Sign Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.submitTransaction}>3. Submit Transaction</button>
+                        </div>
+                    } />
+                    <Tab id="2" title="2. Send Token to Address" panel={
+                        <div>
+                        <h2>Send Token - Transaction Builder</h2>
+                            <button style={{padding: "10px"}} onClick={this.buildSendTokenTransaction}>1. Build Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.signTransaction}>2. Sign Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.submitTransaction}>3. Submit Transaction</button>
+                        </div>
+                    } />
+                    <Tab id="3" title="3. Send ADA to Plutus Script" panel={
+                        <div>
+                            <h2>Send ADA to Plutus Script - Transaction Builder</h2>
+                            <button style={{padding: "10px"}} onClick={this.buildSendAdaToPlutusScript}>1. Build Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.signTransaction}>2. Sign Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.submitTransaction}>3. Submit Transaction</button>
+                        </div>
+                    } />
+                    <Tab id="4" title="4. Send Token to Plutus Script" panel={
+                        <div>
+                            <h2>Send Token to Plutus Script - Transaction Builder</h2>
+                            <button style={{padding: "10px"}} onClick={this.buildSendTokenToPlutusScript}>1. Build Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.signTransaction}>2. Sign Transaction</button>
+                            <button style={{padding: "10px"}} onClick={this.submitTransaction}>3. Submit Transaction</button>
+                        </div>
+                    } />
+                    <Tabs.Expander />
+                </Tabs>
+
+                <hr/>
+                <br/>
                 <p>{`Unsigned txBodyCborHex: ${this.state.txBodyCborHex_unsigned}`}</p>
-                <button style={{padding: "10px"}} onClick={this.signTransaction}>2. Sign Transaction</button>
                 <p>{`Signed txBodyCborHex: ${this.state.txBodyCborHex_signed}`}</p>
-                <button style={{padding: "10px"}} onClick={this.submitTransaction}>3. Submit Transaction</button>
                 <p>{`Submitted Tx Hash: ${this.state.submittedTxHash}`}</p>
+                <p>{this.state.submittedTxHash ? 'check your wallet !' : ''}</p>
+
+
 
             </div>
         )

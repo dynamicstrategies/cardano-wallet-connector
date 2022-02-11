@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@emurgo/cardano-serialization-lib-asmjs": "^9.1.4",
+    "@blueprintjs/core": "^3.53.0",
+    "@emurgo/cardano-serialization-lib-asmjs": "^10.0.1",
     "@testing-library/jest-dom": "^5.16.1",
     "@testing-library/react": "^12.1.2",
     "@testing-library/user-event": "^13.5.0",
