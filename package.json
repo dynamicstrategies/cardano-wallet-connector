@@ -5,7 +5,7 @@
   "dependencies": {
     "@blueprintjs/core": "^3.53.0",
     "@blueprintjs/icons": "^3.32.0",
-    "@emurgo/cardano-serialization-lib-asmjs": "^10.0.4-beta.1",
+    "@emurgo/cardano-serialization-lib-asmjs": "^10.0.4-beta.4",
     "@testing-library/jest-dom": "^5.16.1",
     "@testing-library/react": "^12.1.2",
     "@testing-library/user-event": "^13.5.0",

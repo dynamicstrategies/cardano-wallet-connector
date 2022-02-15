@@ -554,7 +554,7 @@ export default class App extends React.Component
         // Find the available UTXOs in the wallet and
         // us them as Inputs
         const txUnspentOutputs = await this.getTxUnspentOutputs();
-        txBuilder.add_inputs_from(txUnspentOutputs, 3)
+        txBuilder.add_inputs_from(txUnspentOutputs, 2)
 
 
         // calculate the min fee required and send any change to an address
@@ -1420,8 +1420,6 @@ export default class App extends React.Component
                                 />
                             </FormGroup>
                             <button style={{padding: "10px"}} onClick={this.buildRedeemTokenFromPlutusScript}>Run</button>
-                            {/*<button style={{padding: "10px"}} onClick={this.signTransaction}>2. Sign Transaction</button>*/}
-                            {/*<button style={{padding: "10px"}} onClick={this.submitTransaction}>3. Submit Transaction</button>*/}
                         </div>
                     } />
                     <Tabs.Expander />
