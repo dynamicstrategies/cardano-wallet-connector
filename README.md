@@ -41,6 +41,10 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 - The Plutus Script Address is derived from plutus script itself, so the contract has the same address for everyone: "addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8"
 - The cardano-serialization-lib is constantly being updated and the release from v9 to v10 has breaking changes.
 
+### Live Demo
+
+A demo of the DApp is running here:
+https://dynamicstrategies.io/wconnector
 
 ### Useful Links
 
