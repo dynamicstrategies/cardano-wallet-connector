@@ -1,18 +1,17 @@
-# Boilerplate for Cardano CCVault Wallet DApp connector
+# Cardano DApp Wallet Connector
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
-## Available Scripts
+### React JS demo
 
-In the project directory, you can run:
-
-### `npm start run`
+In the project directory, you can run: `npm start run`
 
 Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
 
 ### What is this useful for:
+You can use this code as a starting point for the following:
 - you are building a DApp and want to connect to the user's wallet (Nami, CCVault, or Flint)
 - you want to read the balance, the UTXOs and the available tokens at the user's wallet
 - you want the user to interact with your DApp
