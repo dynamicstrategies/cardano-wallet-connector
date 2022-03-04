@@ -19,7 +19,7 @@ You can use this code as a starting point for the following:
 - you want the user to lock ADA and Tokens at a Plutus Script
 - you want the user to redeem ADA and Tokens that have been locked at the Plutus Script
 
-This boilerplate code was written in javascript and React Js, so caters to the devs who already use this framework. Thee boilerplate should allow anyone to read it and
+This boilerplate code was written in javascript and React Js, so caters to the devs who already use this framework.
 
 ### How does it work:
 - It uses the wallet connector standard CIP30 and the cardano-serialization-lib
