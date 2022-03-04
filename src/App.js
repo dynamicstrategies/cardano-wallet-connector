@@ -39,13 +39,17 @@ import {
     ConstrPlutusData,
     ExUnits,
     Int,
+    NetworkInfo,
+    EnterpriseAddress,
     TransactionOutputs,
     hash_transaction,
     hash_script_data,
     hash_plutus_data,
-    ScriptDataHash
+    ScriptDataHash, Ed25519KeyHash, NativeScript, StakeCredential
 } from "@emurgo/cardano-serialization-lib-asmjs"
+import {blake2b} from "blakejs";
 let Buffer = require('buffer/').Buffer
+let blake = require('blakejs')
 
 
 export default class App extends React.Component
@@ -146,6 +150,39 @@ export default class App extends React.Component
             () => {
                 this.refreshData()
             })
+    }
+
+    /**
+     * Generate address from the plutus contract cborhex
+     */
+    generateScriptAddress = () => {
+        // cborhex of the alwayssucceeds.plutus
+        // const cborhex = "4e4d01000033222220051200120011";
+        // const cbor = Buffer.from(cborhex, "hex");
+        // const blake2bhash = blake.blake2b(cbor, 0, 28);
+
+        const script = PlutusScript.from_bytes(Buffer.from(this.state.plutusScriptCborHex, "hex"))
+        // const blake2bhash = blake.blake2b(script.to_bytes(), 0, 28);
+        const blake2bhash = "67f33146617a5e61936081db3b2117cbf59bd2123748f58ac9678656";
+        const scripthash = ScriptHash.from_bytes(Buffer.from(blake2bhash,"hex"));
+
+        const cred = StakeCredential.from_scripthash(scripthash);
+        const networkId = NetworkInfo.testnet().network_id();
+        const baseAddr = EnterpriseAddress.new(networkId, cred);
+        const addr = baseAddr.to_address();
+        const addrBech32 = addr.to_bech32();
+
+        // hash of the address generated from script
+        console.log(Buffer.from(addr.to_bytes(), "utf8").toString("hex"))
+
+        // hash of the address generated using cardano-cli
+        const ScriptAddress = Address.from_bech32("addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8");
+        console.log(Buffer.from(ScriptAddress.to_bytes(), "utf8").toString("hex"))
+
+
+        console.log(ScriptAddress.to_bech32())
+        console.log(addrBech32)
+
     }
 
     /**
@@ -330,10 +367,10 @@ export default class App extends React.Component
                             const assetName = assetNames.get(j);
                             const assetNameString = Buffer.from(assetName.name(),"utf8").toString();
                             const assetNameHex = Buffer.from(assetName.name(),"utf8").toString("hex")
-                            // console.log(`Asset Name: ${assetNameHex}`)
                             const multiassetAmt = multiasset.get_asset(policyId, assetName)
                             multiAssetStr += `+ ${multiassetAmt.to_str()} + ${policyIdHex}.${assetNameHex} (${assetNameString})`
                             // console.log(assetNameString)
+                            // console.log(`Asset Name: ${assetNameHex}`)
                         }
                     }
                 }
@@ -466,6 +503,9 @@ export default class App extends React.Component
      * @returns {Promise<void>}
      */
     refreshData = async () => {
+
+        this.generateScriptAddress()
+
         try{
             const walletFound = this.checkIfWalletFound();
             if (walletFound) {

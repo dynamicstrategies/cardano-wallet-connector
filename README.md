@@ -39,7 +39,11 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 - The cardano-serialization-lib can be used to create transacations in the front end using javascript. It has the potential to simplify some of the plutus off chain code. As an example for the use case above only the On Chain Plutus smart contract was used while all of the Off Chain was done with the cardano-serialization-lib. This greatly reduced the amount of code that needs to be written in Haskell and avoid needing to interact with Plutus Application Backend
 - The use cases use the "alwayssucceeds.plutus" Plutus Smart contract that always succeeds.
 - The Plutus Script Address is derived from plutus script itself, so the contract has the same address for everyone: "addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8"
-- The cardano-serialization-lib is constantly being updated and the release from v9 to v10 has breaking changes.
+- The cardano-serialization-lib is constantly being updated and the release from v9 to v10 has breaking changes. This repo uses v10 of the cardano-serialization-lib
+
+### Troubleshooting
+- If you get an error that starts with `FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory ... then run this `export NODE_OPTIONS="--max-old-space-size=8192"` before runnig `npm start`
+- If you get an error that starts with ` Not enough ADA leftover to include non-ADA assets in a change address ...` then first make sure that you have enough ADA in your wallet and then try changing the "strategy" number in this part of the code `txBuilder.add_inputs_from(txUnspentOutputs, 1)` which determines how it selects available UTXOs from your wallet. The options are `1` for LargestFirst, `2` for RandomImprove, `3` for LargestFirstMultiAsset and `4` for RandomImproveMultiAsset 
 
 ### Live Demo
 
