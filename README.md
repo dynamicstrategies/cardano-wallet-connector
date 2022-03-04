@@ -44,6 +44,7 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 ### Troubleshooting
 - If you get an error that starts with `FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory ...` then run this `export NODE_OPTIONS="--max-old-space-size=8192"` before runnig `npm start`
 - If you get an error that starts with ` Not enough ADA leftover to include non-ADA assets in a change address ...` then first make sure that you have enough ADA in your wallet and then try changing the "strategy" number in this part of the code `txBuilder.add_inputs_from(txUnspentOutputs, 1)` which determines how it selects available UTXOs from your wallet. The options are `1` for LargestFirst, `2` for RandomImprove, `3` for LargestFirstMultiAsset and `4` for RandomImproveMultiAsset 
+- Requires Nodejs version 14 or higher
 
 ### Live Demo
 
