@@ -604,6 +604,9 @@ export default class App extends React.Component
         )
 
         let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+
+        console.log(txVkeyWitnesses)
+
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
@@ -612,6 +615,7 @@ export default class App extends React.Component
             tx.body(),
             transactionWitnessSet
         );
+
 
         const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
@@ -760,6 +764,9 @@ export default class App extends React.Component
 
         txOutputBuilder = txOutputBuilder.next();
 
+
+
+
         let multiAsset = MultiAsset.new();
         let assets = Assets.new()
         assets.insert(
@@ -783,6 +790,9 @@ export default class App extends React.Component
         // us them as Inputs
         const txUnspentOutputs = await this.getTxUnspentOutputs();
         txBuilder.add_inputs_from(txUnspentOutputs, 3)
+
+
+
 
 
         // calculate the min fee required and send any change to an address
