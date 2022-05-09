@@ -25,7 +25,7 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 - It uses the wallet connector standard CIP30 and the cardano-serialization-lib
 - the CIP30 standard has been implemented by Nami, CCvault and Flint
 - It uses the cardano-serializatioon-lib to build transactions in the javascript front-end, then sign them and send the transactrons with the user's wallet
-- you can clone the git repo and then `npm instal`l and `npm start run` to start a local session
+- you can clone the git repo and then `npm install` and `npm start run` to start a local session
 
 ### What does it do:
 - send ADA to an address
