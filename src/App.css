@@ -7,6 +7,25 @@
   pointer-events: none;
 }
 
+.wallets-wrapper {
+  display: flex;
+}
+
+.wallet-label {
+  display: flex !important;
+  align-items: center;
+}
+
+.wallet-label span {
+  font-size: 20px;
+  font-family: RobotoRegular;
+  font-style: normal;
+  font-weight: normal;
+  color: #272727;
+  overflow: hidden;
+  text-align: center;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .App-logo {
     animation: App-logo-spin infinite 20s linear;
