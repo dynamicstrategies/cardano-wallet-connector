@@ -46,16 +46,19 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 - If you get an error that starts with ` Not enough ADA leftover to include non-ADA assets in a change address ...` then first make sure that you have enough ADA in your wallet and then try changing the "strategy" number in this part of the code `txBuilder.add_inputs_from(txUnspentOutputs, 1)` which determines how it selects available UTXOs from your wallet. The options are `0` for LargestFirst, `1` for RandomImprove, `2` for LargestFirstMultiAsset and `3` for RandomImproveMultiAsset 
 - Requires Nodejs version v14 or higher
 
-### Live Demo
+### Live Demos
 
 A demo showcasing all functionalities of the wallet connector:
+
 https://dynamicstrategies.io/wconnector
 
-A working integration of the wallet connector into the Cardano Beam App
+A working integration of the wallet connector into the Cardano Beam App:
+
 https://cardanobeam.app/web
 
-### Guide on Cardano Developer Portal
+### Guide on the Cardano Developer Portal
 Explanation of the different section of the code
+
 https://developers.cardano.org/docs/get-started/cardano-serialization-lib/create-react-app 
 
 ### Useful Links
