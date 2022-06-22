@@ -139,6 +139,11 @@ export default class App extends React.Component
      * Poll the wallets it can read from the browser.
      * Sometimes the html document loads before the browser initialized browser plugins (like Nami or Flint).
      * So we try to poll the wallets 3 times (with 1 second in between each try).
+     *
+     * Note: CCVault and Eternl are the same wallet, Eternl is a rebrand of CCVault
+     * So both of these wallets as the Eternl injects itself twice to maintain
+     * backward compatibility
+     *
      * @param count The current try count.
      */
     pollWallets = (count = 0) => {

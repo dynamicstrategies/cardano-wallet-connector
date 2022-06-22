@@ -48,8 +48,15 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 
 ### Live Demo
 
-A demo of the DApp is running here:
+A demo showcasing all functionalities of the wallet connector:
 https://dynamicstrategies.io/wconnector
+
+A working integration of the wallet connector into the Cardano Beam App
+https://cardanobeam.app/web
+
+### Guide on Cardano Developer Portal
+Explanation of the different section of the code
+https://developers.cardano.org/docs/get-started/cardano-serialization-lib/create-react-app 
 
 ### Useful Links
 
