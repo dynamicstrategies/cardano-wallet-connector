@@ -41,6 +41,56 @@ This boilerplate code was written in javascript and React Js, so caters to the d
 - The Plutus Script Address is derived from plutus script itself, so the contract has the same address for everyone: "addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8"
 - The cardano-serialization-lib is constantly being updated and the release from v9 to v10 has breaking changes. This repo uses v10 of the cardano-serialization-lib
 
+### Vasil Hard Fork - update to the Cost Model
+The hard fork introduces changes to the cost model that determines how much it costs to run
+scripts on the Cardano network. This is relevant when you need to redeem assets from scripts, or execute script code
+onchain. Sending assets to a script address is not affected by the cost model.
+
+The cost model in this repo has been updated for the hard fork and will work as intended on the testnet and on the Mainnet after the vasil hard fork. But it will not work on the Mainnet out of the box before the Vasil hard fork
+
+- If you are using the repo on the Testnet - it should just work (default)
+- If you are using the repo on the Mainnet after the Vasil hard fork - it should just work
+- If you are using the repo on the Mainnet before the Vasil hard fork - you need to change the cost model in the model back to pre-vasil hard fork. The old, pre vasil hard fork, cost model is commented out in the code and starts with `const cost_model_vals = [197209, 0, 1...`
+
+For reference - Pre-Vasil Cost model:
+
+```javascript
+const cost_model_vals = [
+            197209, 0, 1, 1, 396231, 621, 0, 1, 150000, 1000, 
+            0, 1, 150000, 32, 2477736, 29175, 4, 29773, 100, 29773, 100, 29773, 100, 
+            29773, 100, 29773, 100, 29773, 100, 100, 100, 29773, 100, 150000, 32, 150000, 
+            32, 150000, 32, 150000, 1000, 0, 1, 150000, 32, 150000, 1000, 0, 8, 148000, 
+            425507, 118, 0, 1, 1, 150000, 1000, 0, 8, 150000, 112536, 247, 1, 150000, 
+            10000, 1, 136542, 1326, 1, 1000, 150000, 1000, 1, 150000, 32, 150000, 32, 
+            150000, 32, 1, 1, 150000, 1, 150000, 4, 103599, 248, 1, 103599, 248, 1, 
+            145276, 1366, 1, 179690, 497, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 
+            32, 150000, 32, 150000, 32, 148000, 425507, 118, 0, 1, 1, 61516, 11218, 0, 
+            1, 150000, 32, 148000, 425507, 118, 0, 1, 1, 148000, 425507, 118, 0, 1, 1, 
+            2477736, 29175, 4, 0, 82363, 4, 150000, 5000, 0, 1, 150000, 32, 197209, 0, 
+            1, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 
+            150000, 32, 3345831, 1, 1
+        ];
+```
+
+For reference - Post-Vasil Cost model:
+
+```javascript
+const cost_model_vals = [
+            205665, 812, 1, 1, 1000, 571, 0, 1, 1000, 24177, 4, 1, 1000, 32, 117366,
+            10475, 4, 23000, 100, 23000, 100, 23000, 100, 23000, 100, 23000, 100, 23000,
+            100, 100, 100, 23000, 100, 19537, 32, 175354, 32, 46417, 4, 221973, 511, 0, 1,
+            89141, 32, 497525, 14068, 4, 2, 196500, 453240, 220, 0, 1, 1, 1000, 28662, 4,
+            2, 245000, 216773, 62, 1, 1060367, 12586, 1, 208512, 421, 1, 187000, 1000,
+            52998, 1, 80436, 32, 43249, 32, 1000, 32, 80556, 1, 57667, 4, 1000, 10,
+            197145, 156, 1, 197145, 156, 1, 204924, 473, 1, 208896, 511, 1, 52467, 32,
+            64832, 32, 65493, 32, 22558, 32, 16563, 32, 76511, 32, 196500, 453240, 220, 0,
+            1, 1, 69522, 11687, 0, 1, 60091, 32, 196500, 453240, 220, 0, 1, 1, 196500,
+            453240, 220, 0, 1, 1, 806990, 30482, 4, 1927926, 82523, 4, 265318, 0, 4, 0,
+            85931, 32, 205665, 812, 1, 1, 41182, 32, 212342, 32, 31220, 32, 32696, 32,
+            43357, 32, 32247, 32, 38314, 32, 9462713, 1021, 10,
+        ];
+```
+
 ### Troubleshooting
 - If you get an error that starts with `FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory ...` then run this `export NODE_OPTIONS="--max-old-space-size=8192"` before runnig `npm start`
 - If you get an error that starts with ` Not enough ADA leftover to include non-ADA assets in a change address ...` then first make sure that you have enough ADA in your wallet and then try changing the "strategy" number in this part of the code `txBuilder.add_inputs_from(txUnspentOutputs, 1)` which determines how it selects available UTXOs from your wallet. The options are `0` for LargestFirst, `1` for RandomImprove, `2` for LargestFirstMultiAsset and `3` for RandomImproveMultiAsset 

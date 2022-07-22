@@ -911,6 +911,30 @@ export default class App extends React.Component
         transactionWitnessSet.set_plutus_data(datums)
         transactionWitnessSet.set_redeemers(redeemers)
 
+        // Pre Vasil hard fork cost model
+        // const cost_model_vals = [
+        //     197209, 0, 1, 1, 396231, 621, 0, 1, 150000, 1000,
+        //     0, 1, 150000, 32, 2477736, 29175, 4, 29773, 100, 29773, 100, 29773, 100,
+        //     29773, 100, 29773, 100, 29773, 100, 100, 100, 29773, 100, 150000, 32, 150000,
+        //     32, 150000, 32, 150000, 1000, 0, 1, 150000, 32, 150000, 1000, 0, 8, 148000,
+        //     425507, 118, 0, 1, 1, 150000, 1000, 0, 8, 150000, 112536, 247, 1, 150000,
+        //     10000, 1, 136542, 1326, 1, 1000, 150000, 1000, 1, 150000, 32, 150000, 32,
+        //     150000, 32, 1, 1, 150000, 1, 150000, 4, 103599, 248, 1, 103599, 248, 1,
+        //     145276, 1366, 1, 179690, 497, 1, 150000, 32, 150000, 32, 150000, 32, 150000,
+        //     32, 150000, 32, 150000, 32, 148000, 425507, 118, 0, 1, 1, 61516, 11218, 0,
+        //     1, 150000, 32, 148000, 425507, 118, 0, 1, 1, 148000, 425507, 118, 0, 1, 1,
+        //     2477736, 29175, 4, 0, 82363, 4, 150000, 5000, 0, 1, 150000, 32, 197209, 0,
+        //     1, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32,
+        //     150000, 32, 3345831, 1, 1
+        // ];
+
+        /*
+        Post Vasil hard fork cost model
+        If you need to make this code work on the Mainnet, before Vasil hard-fork
+        Then you need to comment this section below and uncomment the cost model above
+        Otherwise it will give errors when redeeming from Scripts
+        Sending assets and ada to Script addresses is unaffected by this cost model
+         */
         const cost_model_vals = [
             205665, 812, 1, 1, 1000, 571, 0, 1, 1000, 24177, 4, 1, 1000, 32, 117366,
             10475, 4, 23000, 100, 23000, 100, 23000, 100, 23000, 100, 23000, 100, 23000,
@@ -1055,6 +1079,16 @@ export default class App extends React.Component
         transactionWitnessSet.set_plutus_data(datums)
         transactionWitnessSet.set_redeemers(redeemers)
 
+        // Pre Vasil hard fork cost model
+        // const cost_model_vals = [197209, 0, 1, 1, 396231, 621, 0, 1, 150000, 1000, 0, 1, 150000, 32, 2477736, 29175, 4, 29773, 100, 29773, 100, 29773, 100, 29773, 100, 29773, 100, 29773, 100, 100, 100, 29773, 100, 150000, 32, 150000, 32, 150000, 32, 150000, 1000, 0, 1, 150000, 32, 150000, 1000, 0, 8, 148000, 425507, 118, 0, 1, 1, 150000, 1000, 0, 8, 150000, 112536, 247, 1, 150000, 10000, 1, 136542, 1326, 1, 1000, 150000, 1000, 1, 150000, 32, 150000, 32, 150000, 32, 1, 1, 150000, 1, 150000, 4, 103599, 248, 1, 103599, 248, 1, 145276, 1366, 1, 179690, 497, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 148000, 425507, 118, 0, 1, 1, 61516, 11218, 0, 1, 150000, 32, 148000, 425507, 118, 0, 1, 1, 148000, 425507, 118, 0, 1, 1, 2477736, 29175, 4, 0, 82363, 4, 150000, 5000, 0, 1, 150000, 32, 197209, 0, 1, 1, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 150000, 32, 3345831, 1, 1];
+
+        /*
+        Post Vasil hard fork cost model
+        If you need to make this code work on the Mainnnet, before Vasil hard-fork
+        Then you need to comment this section below and uncomment the cost model above
+        Otherwise it will give errors when redeeming from Scripts
+        Sending assets and ada to Script addresses is unaffected by this cost model
+         */
         const cost_model_vals = [
             205665, 812, 1, 1, 1000, 571, 0, 1, 1000, 24177, 4, 1, 1000, 32, 117366,
             10475, 4, 23000, 100, 23000, 100, 23000, 100, 23000, 100, 23000, 100, 23000,
