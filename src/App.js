@@ -95,6 +95,10 @@ export default class App extends React.Component
             lovelaceLocked: 3000000,
             manualFee: 900000,
 
+            // CIP-95 Stuff
+            dRepKey: undefined,
+            stakeKey: undefined,
+
         }
 
         /**
@@ -505,6 +509,8 @@ export default class App extends React.Component
                     await this.getChangeAddress();
                     await this.getRewardAddresses();
                     await this.getUsedAddresses();
+                    await this.getPubDRepKey();
+                    await this.getActivePubStakeKeys();
                 } else {
                     await this.setState({
                         Utxos: null,
@@ -518,6 +524,9 @@ export default class App extends React.Component
                         txBodyCborHex_unsigned: "",
                         txBodyCborHex_signed: "",
                         submittedTxHash: "",
+
+                        dRepKey: null,
+                        stakeKey: null,
                     });
                 }
             } else {
@@ -535,6 +544,9 @@ export default class App extends React.Component
                     txBodyCborHex_unsigned: "",
                     txBodyCborHex_signed: "",
                     submittedTxHash: "",
+
+                    dRepKey: null,
+                    stakeKey: null,
                 });
             }
         } catch (err) {
@@ -1144,6 +1156,32 @@ export default class App extends React.Component
 
     }
 
+    // CIP-95 Parts
+
+    getPubDRepKey = async () => {
+        try {
+            const raw = await this.API.getDRepKey();
+            // const changeAddress = Address.from_bytes(Buffer.from(raw, "hex")).to_bech32()
+            const dRepKey = raw;
+            this.setState({dRepKey})
+        } catch (err) {
+            console.log(err)
+        }
+    }
+
+    getActivePubStakeKeys = async () => {
+        try {
+            const raw = await this.API.getStakeKey();
+            //const rawFirst = raw[0];
+            // const usedAddress = Address.from_bytes(Buffer.from(rawFirst, "hex")).to_bech32()
+            // console.log(rewardAddress)
+            const stakeKey = raw;
+            this.setState({stakeKey})
+        } catch (err) {
+            console.log(err)
+        }
+    }
+
 
     async componentDidMount() {
         this.pollWallets();
@@ -1158,7 +1196,7 @@ export default class App extends React.Component
 
 
 
-                <h1>Boilerplate DApp connector to Wallet</h1>
+                <h1>✨Demos dApp✨</h1>
                 <div style={{paddingTop: "10px"}}>
                     <div style={{marginBottom: 15}}>Select wallet:</div>
                     <RadioGroup
@@ -1195,6 +1233,11 @@ export default class App extends React.Component
                 <p><span style={{fontWeight: "bold"}}>Staking Address: </span>{this.state.rewardAddress}</p>
                 <p><span style={{fontWeight: "bold"}}>Used Address: </span>{this.state.usedAddress}</p>
                 <hr style={{marginTop: "40px", marginBottom: "40px"}}/>
+                <h1>CIP-95 🤠</h1>
+                <p><span style={{fontWeight: "bold"}}>DRep Key: </span>{this.state.dRepKey}</p>
+                <p><span style={{fontWeight: "bold"}}>Stake Key: </span>{this.state.stakeKey}</p>
+                <hr style={{marginTop: "40px", marginBottom: "40px"}}/>
+
 
                 <Tabs id="TabsExample" vertical={true} onChange={this.handleTabId} selectedTabId={this.state.selectedTabId}>
                     <Tab id="1" title="1. Send ADA to Address" panel={
