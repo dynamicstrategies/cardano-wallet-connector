@@ -61,7 +61,7 @@ import {
 } from "@emurgo/cardano-serialization-lib-asmjs"
 import "./App.css";
 import {blake2b} from "blakejs";
-import { toContainElement } from '@testing-library/jest-dom/dist/matchers';
+import { toBePartiallyChecked, toContainElement } from '@testing-library/jest-dom/dist/matchers';
 let Buffer = require('buffer/').Buffer
 let blake = require('blakejs')
 
@@ -1198,12 +1198,18 @@ export default class App extends React.Component
 
     getPubDRepKey = async () => {
         try {
+            // From wallet get pub DRep key 
             const raw = await this.API.getPubDRepKey();
-            // const changeAddress = Address.from_bytes(Buffer.from(raw, "hex")).to_bech32()
             const dRepKey = raw;
-            this.setState({dRepKey})
-            // const dRepID = Ed25519KeyHash.from_bytes(Buffer.from(dRepKey, "hex"));
-            // this.setState({dRepID})
+            console.log("DRep Key: ", dRepKey);
+            this.setState({dRepKey});
+            
+            // From wallet's DRep key hash to get DRep ID 
+            const dRepKeyBytes = Buffer.from(dRepKey, "hex");
+            const dRepID = blake.blake2bHex(dRepKeyBytes, null, 28);
+            console.log("DRep ID: ", dRepID);
+            this.setState({dRepID});
+
         } catch (err) {
             console.log(err)
         }
@@ -1361,6 +1367,7 @@ export default class App extends React.Component
                 <hr style={{marginTop: "40px", marginBottom: "40px"}}/>
                 <h1>CIP-95 🤠</h1>
                 <p><span style={{fontWeight: "bold"}}>DRep Key: </span>{this.state.dRepKey}</p>
+                <p><span style={{fontWeight: "bold"}}>DRep ID (DRep key digest): </span>{this.state.dRepID}</p>
                 <p><span style={{fontWeight: "bold"}}>Stake Key: </span>{this.state.stakeKey}</p>
 
                 <Tabs id="cip95" vertical={true} onChange={this.handle95TabId} selectedTab95Id={this.state.selected95TabId}>
