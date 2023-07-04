@@ -113,6 +113,9 @@ export default class App extends React.Component
             dRepKey: undefined,
             stakeKey: undefined,
             dRepID: undefined,
+            cip95ResultTx: "",
+            cip95ResultHash: "",
+            cip95ResultWitness: "",
 
             // vote delegation
             voteDelegationTarget: "abstain",
@@ -559,6 +562,9 @@ export default class App extends React.Component
 
                         dRepKey: null,
                         stakeKey: null,
+                        cip95ResultTx: "",
+                        cip95ResultHash: "",
+                        cip95ResultWitness: "",
                     });
                 }
             } else {
@@ -579,6 +585,7 @@ export default class App extends React.Component
 
                     dRepKey: null,
                     stakeKey: null,
+                    cip95Result: "",
                 });
             }
         } catch (err) {
@@ -1292,9 +1299,14 @@ export default class App extends React.Component
             tx.auxiliary_data(),
         );
 
-        const submittedTxHash = await this.API.submitVoteDelegation(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
-        console.log(submittedTxHash)
-        this.setState({submittedTxHash});
+        const result = await this.API.submitVoteDelegation(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        console.log(result)
+        const cip95ResultTx = result.tx;
+        const cip95ResultHash = result.txHash;
+        const cip95ResultWitness = result.witness;
+        this.setState({cip95ResultTx});
+        this.setState({cip95ResultHash});
+        this.setState({cip95ResultWitness});
     }
 
     async componentDidMount() {
@@ -1672,6 +1684,9 @@ export default class App extends React.Component
                     } />
                     <Tabs.Expander />
                 </Tabs>
+                <p><span style={{fontWeight: "bold"}}>CborHex Tx: </span>{this.state.cip95ResultTx}</p>
+                <p><span style={{fontWeight: "bold"}}>Tx Hash: </span>{this.state.cip95ResultHash}</p>
+                <p><span style={{fontWeight: "bold"}}>Witnesses: </span>{this.state.cip95ResultWitness}</p>
 
                 <hr style={{marginTop: "40px", marginBottom: "40px"}}/>
                 
