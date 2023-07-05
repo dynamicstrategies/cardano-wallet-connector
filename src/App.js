@@ -58,12 +58,15 @@ import {
     encode_json_str_to_metadatum,
     MetadataJsonSchema,
     TransactionMetadatumLabels,
+    DataHash,
+    AuxiliaryDataHash,
 } from "@emurgo/cardano-serialization-lib-asmjs"
 import "./App.css";
 import {blake2b} from "blakejs";
 import { toBePartiallyChecked, toContainElement } from '@testing-library/jest-dom/dist/matchers';
 let Buffer = require('buffer/').Buffer
 let blake = require('blakejs')
+let { bech32, bech32m } = require('bech32')
 
 
 export default class App extends React.Component
@@ -113,6 +116,7 @@ export default class App extends React.Component
             dRepKey: undefined,
             stakeKey: undefined,
             dRepID: undefined,
+            dRepIDBech32: undefined,
             cip95ResultTx: "",
             cip95ResultHash: "",
             cip95ResultWitness: "",
@@ -223,39 +227,6 @@ export default class App extends React.Component
             () => {
                 this.refreshData()
             })
-    }
-
-    /**
-     * Generate address from the plutus contract cborhex
-     */
-    generateScriptAddress = () => {
-        // cborhex of the alwayssucceeds.plutus
-        // const cborhex = "4e4d01000033222220051200120011";
-        // const cbor = Buffer.from(cborhex, "hex");
-        // const blake2bhash = blake.blake2b(cbor, 0, 28);
-
-        const script = PlutusScript.from_bytes(Buffer.from(this.state.plutusScriptCborHex, "hex"))
-        // const blake2bhash = blake.blake2b(script.to_bytes(), 0, 28);
-        const blake2bhash = "67f33146617a5e61936081db3b2117cbf59bd2123748f58ac9678656";
-        const scripthash = ScriptHash.from_bytes(Buffer.from(blake2bhash,"hex"));
-
-        const cred = StakeCredential.from_scripthash(scripthash);
-        const networkId = NetworkInfo.testnet().network_id();
-        const baseAddr = EnterpriseAddress.new(networkId, cred);
-        const addr = baseAddr.to_address();
-        const addrBech32 = addr.to_bech32();
-
-        // hash of the address generated from script
-        console.log(Buffer.from(addr.to_bytes(), "utf8").toString("hex"))
-
-        // hash of the address generated using cardano-cli
-        const ScriptAddress = Address.from_bech32("addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8");
-        console.log(Buffer.from(ScriptAddress.to_bytes(), "utf8").toString("hex"))
-
-
-        console.log(ScriptAddress.to_bech32())
-        console.log(addrBech32)
-
     }
 
     /**
@@ -528,7 +499,6 @@ export default class App extends React.Component
      * @returns {Promise<void>}
      */
     refreshData = async () => {
-        this.generateScriptAddress()
 
         try{
             const walletFound = this.checkIfWalletFound();
@@ -673,7 +643,7 @@ export default class App extends React.Component
 
         let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
 
-        console.log(txVkeyWitnesses)
+        // console.log(txVkeyWitnesses)
 
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
@@ -707,6 +677,11 @@ export default class App extends React.Component
             const dRepID = blake.blake2bHex(dRepKeyBytes, null, 28);
             console.log("DRep ID: ", dRepID);
             this.setState({dRepID});
+            // into bech32
+            const words = bech32.toWords(Buffer.from(dRepID, "hex"));
+            const dRepIDBech32 = bech32.encode('drep_id', words);
+            console.log("DRep ID Bech: ", dRepIDBech32);
+            this.setState({dRepIDBech32});
 
         } catch (err) {
             console.log(err)
@@ -791,7 +766,7 @@ export default class App extends React.Component
 
         let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
 
-        console.log(txVkeyWitnesses)
+        // console.log(txVkeyWitnesses)
 
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
@@ -824,8 +799,6 @@ export default class App extends React.Component
         return (
             <div style={{margin: "20px"}}>
 
-
-
                 <h1>✨Demos dApp✨</h1>
                 <div style={{paddingTop: "10px"}}>
                     <div style={{marginBottom: 15}}>Select wallet:</div>
@@ -847,8 +820,6 @@ export default class App extends React.Component
                     </RadioGroup>
                 </div>
 
-
-
                 <button style={{padding: "20px"}} onClick={this.refreshData}>Refresh</button>
 
                 <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>Wallet Found: </span>{`${this.state.walletFound}`}</p>
@@ -864,8 +835,9 @@ export default class App extends React.Component
                 <p><span style={{fontWeight: "bold"}}>Used Address: </span>{this.state.usedAddress}</p>
                 <hr style={{marginTop: "40px", marginBottom: "40px"}}/>
                 <h1>CIP-95 🤠</h1>
-                <p><span style={{fontWeight: "bold"}}>DRep Key: </span>{this.state.dRepKey}</p>
-                <p><span style={{fontWeight: "bold"}}>DRep ID (DRep key digest): </span>{this.state.dRepID}</p>
+                <p><span style={{fontWeight: "bold"}}> .getPubDRepKey(): </span>{this.state.dRepKey}</p>
+                <p><span style={{fontWeight: "lighter"}}>Hex DRep ID (Key digest): </span>{this.state.dRepID}</p>
+                <p><span style={{fontWeight: "lighter"}}>Bech32 DRep ID (Key digest): </span>{this.state.dRepIDBech32}</p>
                 <p><span style={{fontWeight: "bold"}}>Stake Key: </span>{this.state.stakeKey}</p>
 
                 <Tabs id="cip95" vertical={true} onChange={this.handle95TabId} selectedTab95Id={this.state.selected95TabId}>
