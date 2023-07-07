@@ -120,22 +120,24 @@ export default class App extends React.Component
             cip95ResultTx: "",
             cip95ResultHash: "",
             cip95ResultWitness: "",
+            cip95MetadataURL: undefined,
+            cip95MetadataHash: undefined,
+            cip95MetadatumLabel: BigNum.from_str("3921"),
 
             // vote delegation
             voteDelegationTarget: "abstain",
-            voteDelegationMetadatumLabel: BigNum.from_str("3921"),
-
-            // DRep Registration
-            dRepRegistrationMetadatumLabel: BigNum.from_str("3922"),
-
+        
             // DRep Retirement
-            dRepRetirementMetadatumLabel: BigNum.from_str("3923"),
+            dRepRetirementEpoch : undefined,
 
             // vote
-            voteMetadatumLabel: BigNum.from_str("3924"),
+            voteGovActionID: "gov_action...hd74s",
+            voteChoice: undefined,
 
             // governance action
-            governanceActionMetadatumLabel: BigNum.from_str("3925"),
+            govActionDeposit: 100,
+            govActionHash: "b4e4184bfedf920fec53cdc327de4da661ae427784c0ccca9e3c2f50",
+            govActionType: undefined,
 
         }
 
@@ -535,6 +537,7 @@ export default class App extends React.Component
                         cip95ResultTx: "",
                         cip95ResultHash: "",
                         cip95ResultWitness: "",
+
                     });
                 }
             } else {
@@ -555,7 +558,6 @@ export default class App extends React.Component
 
                     dRepKey: null,
                     stakeKey: null,
-                    cip95Result: "",
                 });
             }
         } catch (err) {
@@ -675,7 +677,7 @@ export default class App extends React.Component
             // From wallet's DRep key hash to get DRep ID 
             const dRepKeyBytes = Buffer.from(dRepKey, "hex");
             const dRepID = blake.blake2bHex(dRepKeyBytes, null, 28);
-            console.log("DRep ID: ", dRepID);
+            console.log("DRep ID Hex: ", dRepID);
             this.setState({dRepID});
             // into bech32
             const words = bech32.toWords(Buffer.from(dRepID, "hex"));
@@ -699,19 +701,7 @@ export default class App extends React.Component
         }
     }
 
-
-    /**
-     * The transaction is build in 3 stages:
-     * 1 - initialize the Transaction Builder
-     * 2 - Add inputs and outputs
-     * 3 - Calculate the fee and how much change needs to be given
-     * 4 - Build the transaction body
-     * 5 - Sign it (at this point the user will be prompted for
-     * a password in his wallet)
-     * 6 - Send the transaction
-     * @returns {Promise<void>}
-     */
-    buildSendVoteDelegation = async () => {
+    buildSubmitMetadataTx = async (txMetadata) => {
 
         const txBuilder = await this.initTransactionBuilder();
         // Send Tx to own address
@@ -726,20 +716,18 @@ export default class App extends React.Component
         );
         
         // Add ceritificate fields as metadata
-        const obj = {
-            delegation_target: this.state.voteDelegationTarget,
-            stake_credential: this.state.stakeKey,
-          };
+        const obj = txMetadata;
+
         // add metadata to tx, have to jump through some object data strcture hoops 
         const metadata = encode_json_str_to_metadatum(JSON.stringify(obj), MetadataJsonSchema.NoConversions);
         const auxMetadata = AuxiliaryData.new();
         
         const transactionMetadata = GeneralTransactionMetadata.new();
-        transactionMetadata.insert(this.state.voteDelegationMetadatumLabel, metadata);
+        transactionMetadata.insert(this.state.cip95MetadatumLabel, metadata);
         auxMetadata.set_metadata(transactionMetadata);
         
         const metadatumLabels = TransactionMetadatumLabels.new();
-        metadatumLabels.add(this.state.voteDelegationMetadatumLabel);
+        metadatumLabels.add(this.state.cip95MetadatumLabel);
         
         // add metadata to tx builder for correct fee calculation
         txBuilder.add_json_metadatum_with_schema(metadatumLabels.get(0), JSON.stringify(obj), MetadataJsonSchema.NoConversions);
@@ -838,14 +826,14 @@ export default class App extends React.Component
                 <p><span style={{fontWeight: "bold"}}> .getPubDRepKey(): </span>{this.state.dRepKey}</p>
                 <p><span style={{fontWeight: "lighter"}}>Hex DRep ID (Key digest): </span>{this.state.dRepID}</p>
                 <p><span style={{fontWeight: "lighter"}}>Bech32 DRep ID (Key digest): </span>{this.state.dRepIDBech32}</p>
-                <p><span style={{fontWeight: "bold"}}>Stake Key: </span>{this.state.stakeKey}</p>
+                <p><span style={{fontWeight: "bold"}}>.getActivePubStakeKeys(): </span>{this.state.stakeKey}</p>
 
                 <Tabs id="cip95" vertical={true} onChange={this.handle95TabId} selectedTab95Id={this.state.selected95TabId}>
                     <Tab id="1" title="1. Submit Vote Delegation 🦸‍♀️" panel={
                         <div style={{marginLeft: "20px"}}>
 
                             <FormGroup
-                                helperText="insert target of delegation: drep_vkaq8l...ka4 | abstain | no confidence"
+                                helperText="insert target of delegation: drep_id...qerpc69 | abstain | no confidence"
                                 label="Target of Vote Delegation"
                             >
                                 <InputGroup
@@ -857,79 +845,224 @@ export default class App extends React.Component
                                 />
                             </FormGroup>
 
-                            <button style={{padding: "10px"}} onClick={this.buildSendVoteDelegation}>Delegate!</button>
+                            <FormGroup
+                                helperText="https://my-metadata-url.json"
+                                label="Optional: Metadata URL"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataURL: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataURL}
+
+                                />
+                            </FormGroup>
+
+                            <FormGroup
+                                helperText=""
+                                label="Optional: Metadata Hash"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataHash: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataHash}
+
+                                />
+                            </FormGroup>
+
+                            <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({ dRep_id : this.state.dRepIDBech32, stake_credential : this.state.stakeKey, metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash}) }>Delegate!</button>
                         </div>
                     } />
-                    <Tab id="2" title="2. Submit DRep Registration" panel={
+                    <Tab id="2" title="2. Submit DRep Registration 👷‍♂️" panel={
                         <div style={{marginLeft: "20px"}}>
 
                             <FormGroup
-                                helperText="insert target of delegation: drep_vkaq8l...ka4 | abstain | no confidence"
-                                label="Target of Vote Delegation"
+                                helperText="https://my-metadata-url.json"
+                                label="Optional: Metadata URL"
                             >
                                 <InputGroup
                                     disabled={false}
                                     leftIcon="id-number"
-                                    onChange={(event) => this.setState({voteDelegationTarget: event.target.value})}
-                                    value={this.state.voteDelegationTarget}
+                                    onChange={(event) => this.setState({cip95MetadataURL: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataURL}
 
                                 />
                             </FormGroup>
 
-                            <button style={{padding: "10px"}} onClick={this.buildSendVoteDelegation}>Run</button>
+                            <FormGroup
+                                helperText=""
+                                label="Optional: Metadata Hash"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataHash: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataHash}
+
+                                />
+                            </FormGroup>
+
+                            <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({ dRep_id : this.state.dRepIDBech32, stake_credential : this.state.stakeKey, metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash}) }>Register</button>
                         </div>
                     } />
-                    <Tab id="3" title="3. Submit DRep Retirement" panel={
+                    <Tab id="3" title="3. Submit DRep Retirement 👴" panel={
                         <div style={{marginLeft: "20px"}}>
 
                             <FormGroup
-                                helperText="insert target of delegation: drep_vkaq8l...ka4 | abstain | no confidence"
-                                label="Target of Vote Delegation"
+                                helperText=""
+                                label="Retirement Epoch"
                             >
                                 <InputGroup
                                     disabled={false}
                                     leftIcon="id-number"
-                                    onChange={(event) => this.setState({voteDelegationTarget: event.target.value})}
-                                    value={this.state.voteDelegationTarget}
+                                    onChange={(event) => this.setState({dRepRetirementEpoch: event.target.value})}
+                                    defaultValue={this.state.dRepRetirementEpoch}
 
                                 />
                             </FormGroup>
 
-                    <button style={{padding: "10px"}} onClick={this.buildSendVoteDelegation}>Run</button>
-                        </div>
-                    } />
-                    <Tab id="4" title="4. Submit Vote" panel={
-                        <div style={{marginLeft: "20px"}}>
                             <FormGroup
-                                helperText="insert target of delegation: drep_vkaq8l...ka4 | abstain | no confidence"
-                                label="Target of Vote Delegation"
+                                helperText="https://my-metadata-url.json"
+                                label="Optional: Metadata URL"
                             >
                                 <InputGroup
                                     disabled={false}
                                     leftIcon="id-number"
-                                    onChange={(event) => this.setState({voteDelegationTarget: event.target.value})}
-                                    value={this.state.voteDelegationTarget}
+                                    onChange={(event) => this.setState({cip95MetadataURL: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataURL}
 
                                 />
                             </FormGroup>
-                            <button style={{padding: "10px"}} onClick={this.buildSendVoteDelegation}>Run</button>
+
+                            <FormGroup
+                                helperText=""
+                                label="Optional: Metadata Hash"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataHash: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataHash}
+
+                                />
+                            </FormGroup>
+
+                    <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({ dRep_id : this.state.dRepIDBech32, retirement_epoch : this.state.dRepRetirementEpoch, metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash}) }>Retire</button>
                         </div>
                     } />
-                    <Tab id="5" title="5. Submit Governance Action" panel={
+                    <Tab id="4" title="4. Submit Vote 🗳" panel={
                         <div style={{marginLeft: "20px"}}>
-                             <FormGroup
-                                helperText="insert target of delegation: drep_vkaq8l...ka4 | abstain | no confidence"
-                                label="Target of Vote Delegation"
+
+                            <FormGroup
+                                helperText=""
+                                label="Gov Action ID"
                             >
                                 <InputGroup
                                     disabled={false}
                                     leftIcon="id-number"
-                                    onChange={(event) => this.setState({voteDelegationTarget: event.target.value})}
-                                    value={this.state.voteDelegationTarget}
+                                    onChange={(event) => this.setState({voteGovActionID: event.target.value})}
+                                    defaultValue={this.state.voteGovActionID}
 
                                 />
                             </FormGroup>
-                            <button style={{padding: "10px"}} onClick={this.buildSendVoteDelegation}>Run</button>
+
+                            <FormGroup
+                                helperText="Yes | No | Abstain"
+                                label="Vote Choice"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({voteChoice: event.target.value})}
+                                    defaultValue={this.state.voteChoice}
+
+                                />
+                            </FormGroup>
+
+                            <FormGroup
+                                helperText="https://my-metadata-url.json"
+                                label="Optional: Metadata URL"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataURL: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataURL}
+
+                                />
+                            </FormGroup>
+
+                            <FormGroup
+                                helperText=""
+                                label="Optional: Metadata Hash"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataHash: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataHash}
+
+                                />
+                            </FormGroup>
+                            <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({ governance_action_id : this.state.voteGovActionID, role : "dRep", witness : "witness", metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash, vote : this.state.voteChoice}) }>Vote!</button>
+                        </div>
+                    } />
+                    <Tab id="5" title="5. Submit Governance Action 💡" panel={
+                        <div style={{marginLeft: "20px"}}>
+
+                            <FormGroup
+                                helperText=""
+                                label="Gov Action Type"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({govActionType: event.target.value})}
+                                    defaultValue={this.state.govActionType}
+
+                                />
+                            </FormGroup>
+
+                            <FormGroup
+                                helperText=""
+                                label="Last Gov Action Hash"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({govActionHash: event.target.value})}
+                                    defaultValue={this.state.govActionHash}
+
+                                />
+                            </FormGroup>
+
+                            <FormGroup
+                                helperText="https://my-metadata-url.json"
+                                label="Optional: Metadata URL"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataURL: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataURL}
+
+                                />
+                            </FormGroup>
+
+                            <FormGroup
+                                helperText=""
+                                label="Optional: Metadata Hash"
+                            >
+                                <InputGroup
+                                    disabled={false}
+                                    leftIcon="id-number"
+                                    onChange={(event) => this.setState({cip95MetadataHash: event.target.value})}
+                                    defaultValue={this.state.cip95MetadataHash}
+
+                                />
+                            </FormGroup>
+                            <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({ governance_type : this.state.govActionType, gov_action_deposit : this.state.govActionDeposit, last_gov_action_hash : this.state.govActionHash, metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash}) }>Submit!</button>
 
                         </div>
                     } />
