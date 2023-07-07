@@ -113,6 +113,8 @@ export default class App extends React.Component
 
             // CIP-95 Stuff
             selected95TabId: "1",
+            selectedCIP95: false,
+
             dRepKey: undefined,
             stakeKey: undefined,
             dRepID: undefined,
@@ -210,13 +212,6 @@ export default class App extends React.Component
             this.refreshData()
         });
     }
-
-    /**
-     * Handles the tab selection on the user form
-     * @param tabId
-     */
-    handleTabId = (tabId) => this.setState({selectedTabId: tabId})
-    handleTab95Id = (tabId) => this.setState({selectedTab95Id: tabId})
 
     /**
      * Handles the radio buttons on the form that
@@ -496,6 +491,11 @@ export default class App extends React.Component
         }
     }
 
+    checkIfCIP95MethodsAvailable = async () => {
+        const hasCIP95Methods =( this.API.hasOwnProperty('getPubDRepKey') && this.API.hasOwnProperty('getActivePubStakeKeys'));
+        console.log(`Has CIP95 .getPubDRepKey() and .getActivePubStakeKeys: ${hasCIP95Methods}`)
+        return hasCIP95Methods;
+    }
     /**
      * Refresh all the data from the user's wallet
      * @returns {Promise<void>}
@@ -504,14 +504,16 @@ export default class App extends React.Component
 
         try{
             const walletFound = this.checkIfWalletFound();
-            if (walletFound) {
+
+            if (walletFound && this.state.selectedCIP95) {
                 await this.getAPIVersion();
                 await this.getWalletName();
-                const walletEnabled = await this.enableWallet();
-                if (walletEnabled) {
+                const walletEnabled = await this.enableCIP95Wallet();
+                const hasCIP95Methods = await this.checkIfCIP95MethodsAvailable();
+
+                if (walletEnabled && hasCIP95Methods) {
                     await this.getNetworkId();
                     await this.getUtxos();
-                    await this.getCollateral();
                     await this.getBalance();
                     await this.getChangeAddress();
                     await this.getRewardAddresses();
@@ -532,14 +534,50 @@ export default class App extends React.Component
                         txBodyCborHex_signed: "",
                         submittedTxHash: "",
 
-                        dRepKey: null,
-                        stakeKey: null,
+                        dRepKey: "",
+                        stakeKey: "",
+                        dRepID: "",
+                        dRepIDBech32: "",
                         cip95ResultTx: "",
                         cip95ResultHash: "",
                         cip95ResultWitness: "",
-
                     });
                 }
+            } else if (walletFound) {
+                    await this.getAPIVersion();
+                    await this.getWalletName();
+                    const walletEnabled = await this.enableWallet();
+                    if (walletEnabled) {
+                        await this.getNetworkId();
+                        await this.getUtxos();
+                        // await this.getCollateral();
+                        await this.getBalance();
+                        await this.getChangeAddress();
+                        await this.getRewardAddresses();
+                        await this.getUsedAddresses();
+                    } else {
+                        await this.setState({
+                            Utxos: null,
+                            CollatUtxos: null,
+                            balance: null,
+                            changeAddress: null,
+                            rewardAddress: null,
+                            usedAddress: null,
+    
+                            txBody: null,
+                            txBodyCborHex_unsigned: "",
+                            txBodyCborHex_signed: "",
+                            submittedTxHash: "",
+    
+                            dRepKey: "",
+                            stakeKey: "",
+                            dRepID: "",
+                            dRepIDBech32: "",
+                            cip95ResultTx: "",
+                            cip95ResultHash: "",
+                            cip95ResultWitness: "",
+                        });
+                    }
             } else {
                 await this.setState({
                     walletIsEnabled: false,
@@ -556,8 +594,13 @@ export default class App extends React.Component
                     txBodyCborHex_signed: "",
                     submittedTxHash: "",
 
-                    dRepKey: null,
-                    stakeKey: null,
+                    dRepKey: "",
+                    stakeKey: "",
+                    dRepID: "",
+                    dRepIDBech32: "",
+                    cip95ResultTx: "",
+                    cip95ResultHash: "",
+                    cip95ResultWitness: "",
                 });
             }
         } catch (err) {
@@ -665,7 +708,6 @@ export default class App extends React.Component
     }
 
     // CIP-95 Parts
-
     getPubDRepKey = async () => {
         try {
             // From wallet get pub DRep key 
@@ -699,6 +741,24 @@ export default class App extends React.Component
         } catch (err) {
             console.log(err)
         }
+    }
+
+    enableCIP95Wallet = async () => {
+        const walletKey = this.state.whichWalletSelected;
+        try {
+            this.API = await window.cardano[walletKey].enable({"cip": 95});
+        } catch(err) {
+            console.log(err);
+        }
+        return this.checkIfWalletEnabled();
+    }
+
+    handleTab95Id = (tabId) => this.setState({selectedTab95Id: tabId})
+
+    handleCIP95Select = () => {
+        const selectedCIP95 = !this.state.selectedCIP95;
+        console.log("CIP-95 Selected?: ", selectedCIP95);
+        this.setState({selectedCIP95});
     }
 
     buildSubmitMetadataTx = async (txMetadata) => {
@@ -788,6 +848,9 @@ export default class App extends React.Component
             <div style={{margin: "20px"}}>
 
                 <h1>✨Demos dApp✨</h1>
+
+                <input type="checkbox" onChange={this.handleCIP95Select}/> CIP-95?
+
                 <div style={{paddingTop: "10px"}}>
                     <div style={{marginBottom: 15}}>Select wallet:</div>
                     <RadioGroup
@@ -808,7 +871,7 @@ export default class App extends React.Component
                     </RadioGroup>
                 </div>
 
-                <button style={{padding: "20px"}} onClick={this.refreshData}>Refresh</button>
+                <button style={{padding: "20px"}} onClick={this.refreshData}>Refresh</button> 
 
                 <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>Wallet Found: </span>{`${this.state.walletFound}`}</p>
                 <p><span style={{fontWeight: "bold"}}>Wallet Connected: </span>{`${this.state.walletIsEnabled}`}</p>
@@ -827,6 +890,7 @@ export default class App extends React.Component
                 <p><span style={{fontWeight: "lighter"}}>Hex DRep ID (Key digest): </span>{this.state.dRepID}</p>
                 <p><span style={{fontWeight: "lighter"}}>Bech32 DRep ID (Key digest): </span>{this.state.dRepIDBech32}</p>
                 <p><span style={{fontWeight: "bold"}}>.getActivePubStakeKeys(): </span>{this.state.stakeKey}</p>
+
 
                 <Tabs id="cip95" vertical={true} onChange={this.handle95TabId} selectedTab95Id={this.state.selected95TabId}>
                     <Tab id="1" title="1. Submit Vote Delegation 🦸‍♀️" panel={
