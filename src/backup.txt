@@ -1,0 +1,183 @@
+    buildMetadataCertTx2 = async (txMetadata, certs) => {
+
+        const txBuilder = await this.initTransactionBuilder();
+
+        // Send Tx to own address
+        const shelleyOutputAddress = Address.from_bech32(this.state.usedAddress);
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress);
+        txBuilder.add_output(
+            TransactionOutput.new(
+                shelleyOutputAddress,
+                Value.new(BigNum.from_str("3000000"))
+            ),
+        );
+        
+        // Add in the certificates
+        txBuilder.set_certs(certs);
+
+        // Add ceritificate fields as metadata
+        const obj = txMetadata;
+
+        // add metadata to tx, have to jump through some object data strcture hoops 
+        const metadata = encode_json_str_to_metadatum(JSON.stringify(obj), MetadataJsonSchema.NoConversions);
+        const auxMetadata = AuxiliaryData.new();
+        const transactionMetadata = GeneralTransactionMetadata.new();
+        transactionMetadata.insert(this.state.cip95MetadatumLabel, metadata);
+        auxMetadata.set_metadata(transactionMetadata);
+        const metadatumLabels = TransactionMetadatumLabels.new();
+        metadatumLabels.add(this.state.cip95MetadatumLabel);
+        // add metadata to tx builder for correct fee calculation
+        txBuilder.add_json_metadatum_with_schema(metadatumLabels.get(0), JSON.stringify(obj), MetadataJsonSchema.NoConversions);
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 1)
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+        
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+
+        // Tx witness
+        const transactionWitnessSet = TransactionWitnessSet.new();
+          
+        const tx = Transaction.new(
+            txBody,
+            TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes()),
+            auxMetadata,
+        )
+
+        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
+
+        transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
+
+        const signedTx = Transaction.new(
+            tx.body(),
+            transactionWitnessSet,
+            tx.auxiliary_data(),
+        );
+
+        const result = await this.API.submitVoteDelegation(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        console.log(result)
+        const cip95ResultTx = result.tx;
+        const cip95ResultHash = result.txHash;
+        const cip95ResultWitness = result.witness;
+        this.setState({cip95ResultTx});
+        this.setState({cip95ResultHash});
+        this.setState({cip95ResultWitness});
+    }
+
+    generateStakeRegCert = () => {
+        const stakeKeyHash = (PublicKey.from_bytes(Buffer.from(this.state.stakeKey, 'hex'))).hash();
+        const certs = Certificates.new();
+        certs.add(Certificate.new_stake_registration(
+            StakeRegistration.new(StakeCredential.from_keyhash(stakeKeyHash))
+            )
+        );
+        return certs;
+    }
+
+    generateDeStakeRegCert = () => {
+        const stakeKeyHash = (PublicKey.from_bytes(Buffer.from(this.state.stakeKey, 'hex'))).hash();
+        const certs = Certificates.new();
+        certs.add(Certificate.new_stake_deregistration(
+            StakeDeregistration.new(StakeCredential.from_keyhash(stakeKeyHash))
+            )
+        );
+        return certs;
+    }
+
+    generateStakeDelegCert = () => {
+        const poolKeyHash = 'cbfa34f3bb9936db6e425b2c327606615a7e1ed922bdd92315d83825';
+        const stakeKeyHash = (PublicKey.from_bytes(Buffer.from(this.state.stakeKey, 'hex'))).hash();
+        const certs = Certificates.new();
+        certs.add(Certificate.new_stake_delegation(
+            StakeDelegation.new(StakeCredential.from_keyhash(stakeKeyHash), 
+                    Ed25519KeyHash.from_bytes(Buffer.from(poolKeyHash, 'hex'))
+                )
+              )
+            )
+        return certs;
+    }
+
+    submitVoteDelegation = async (signedTx) => {
+        const result = await this.API.submitVoteDelegation(Buffer.from((signedTx).to_bytes(), "utf8").toString("hex"));
+        console.log(result)
+        const cip95ResultTx = result.tx;
+        const cip95ResultHash = result.txHash;
+        const cip95ResultWitness = result.witness;
+        this.setState({cip95ResultTx});
+        this.setState({cip95ResultHash});
+        this.setState({cip95ResultWitness});
+    } 
+
+    buildMetadataCertTx = async (txMetadata, certs) => {
+        const txBuilder = await this.initTransactionBuilder();
+
+        // Send Tx to own address
+        const shelleyOutputAddress = Address.from_bech32(this.state.usedAddress);
+        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress);
+        txBuilder.add_output(
+            TransactionOutput.new(
+                shelleyOutputAddress,
+                Value.new(BigNum.from_str("3000000"))
+            ),
+        );
+        
+        // Add in the certificates
+        txBuilder.set_certs(certs);
+
+        // Add ceritificate fields as metadata
+        const obj = txMetadata;
+
+        // add metadata to tx, have to jump through some object data strcture hoops 
+        const metadata = encode_json_str_to_metadatum(JSON.stringify(obj), MetadataJsonSchema.NoConversions);
+        const auxMetadata = AuxiliaryData.new();
+        const transactionMetadata = GeneralTransactionMetadata.new();
+        transactionMetadata.insert(this.state.cip95MetadatumLabel, metadata);
+        auxMetadata.set_metadata(transactionMetadata);
+        const metadatumLabels = TransactionMetadatumLabels.new();
+        metadatumLabels.add(this.state.cip95MetadatumLabel);
+        // add metadata to tx builder for correct fee calculation
+        txBuilder.add_json_metadatum_with_schema(metadatumLabels.get(0), JSON.stringify(obj), MetadataJsonSchema.NoConversions);
+
+        // Find the available UTXOs in the wallet and
+        // us them as Inputs
+        const txUnspentOutputs = await this.getTxUnspentOutputs();
+        txBuilder.add_inputs_from(txUnspentOutputs, 1)
+
+        // calculate the min fee required and send any change to an address
+        txBuilder.add_change_if_needed(shelleyChangeAddress)
+        
+        // once the transaction is ready, we build it to get the tx body without witnesses
+        const txBody = txBuilder.build();
+
+        // Tx witness
+        const transactionWitnessSet = (TransactionWitnessSet.new());
+          
+        const tx = Transaction.new(
+            txBody,
+            TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes()),
+            auxMetadata,
+        )
+
+        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
+
+        transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
+        const signedTx = Transaction.new(
+            tx.body(),
+            transactionWitnessSet,
+            tx.auxiliary_data(),
+        );
+        
+        return signedTx;
+    }
+
+    voteDelegate = async (metadata) => {
+        const unsignedTx = await this.buildMetadataCertTx(metadata, this.generateDeStakeRegCert());
+        this.submitVoteDelegation(unsignedTx);
+    }

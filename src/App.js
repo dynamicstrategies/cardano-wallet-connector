@@ -60,6 +60,14 @@ import {
     TransactionMetadatumLabels,
     DataHash,
     AuxiliaryDataHash,
+    Certificate,
+    StakeDelegation,
+    PublicKey,
+    StakeRegistration,
+    Certificates,
+    TransactionWitnessSets,
+    StakeDeregistration,
+
 } from "@emurgo/cardano-serialization-lib-asmjs"
 import "./App.css";
 import {blake2b} from "blakejs";
@@ -642,71 +650,6 @@ export default class App extends React.Component
         return txOutputs
     }
 
-    /**
-     * The transaction is build in 3 stages:
-     * 1 - initialize the Transaction Builder
-     * 2 - Add inputs and outputs
-     * 3 - Calculate the fee and how much change needs to be given
-     * 4 - Build the transaction body
-     * 5 - Sign it (at this point the user will be prompted for
-     * a password in his wallet)
-     * 6 - Send the transaction
-     * @returns {Promise<void>}
-     */
-    buildSendADATransaction = async () => {
-
-        const txBuilder = await this.initTransactionBuilder();
-        const shelleyOutputAddress = Address.from_bech32(this.state.addressBech32SendADA);
-        const shelleyChangeAddress = Address.from_bech32(this.state.changeAddress);
-
-        txBuilder.add_output(
-            TransactionOutput.new(
-                shelleyOutputAddress,
-                Value.new(BigNum.from_str(this.state.lovelaceToSend.toString()))
-            ),
-        );
-
-        // Find the available UTXOs in the wallet and
-        // us them as Inputs
-        const txUnspentOutputs = await this.getTxUnspentOutputs();
-        txBuilder.add_inputs_from(txUnspentOutputs, 1)
-
-        // calculate the min fee required and send any change to an address
-        txBuilder.add_change_if_needed(shelleyChangeAddress)
-
-        // once the transaction is ready, we build it to get the tx body without witnesses
-        const txBody = txBuilder.build();
-
-
-        // Tx witness
-        const transactionWitnessSet = TransactionWitnessSet.new();
-
-        const tx = Transaction.new(
-            txBody,
-            TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
-        )
-
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
-
-        // console.log(txVkeyWitnesses)
-
-        txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
-
-        transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
-
-        const signedTx = Transaction.new(
-            tx.body(),
-            transactionWitnessSet
-        );
-
-
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
-        console.log(submittedTxHash)
-        this.setState({submittedTxHash});
-
-
-    }
-
     // CIP-95 Parts
     getPubDRepKey = async () => {
         try {
@@ -774,7 +717,7 @@ export default class App extends React.Component
                 Value.new(BigNum.from_str("3000000"))
             ),
         );
-        
+
         // Add ceritificate fields as metadata
         const obj = txMetadata;
 
@@ -800,8 +743,12 @@ export default class App extends React.Component
         // calculate the min fee required and send any change to an address
         txBuilder.add_change_if_needed(shelleyChangeAddress)
         
+        const stakeKeyHash = (PublicKey.from_bytes(Buffer.from(this.state.stakeKey, 'hex'))).hash();
+
         // once the transaction is ready, we build it to get the tx body without witnesses
         const txBody = txBuilder.build();
+
+        // txBody.required_signers(stakeKeyHash)
 
         // Tx witness
         const transactionWitnessSet = TransactionWitnessSet.new();
@@ -813,11 +760,7 @@ export default class App extends React.Component
         )
 
         let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
-
-        // console.log(txVkeyWitnesses)
-
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
-
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
 
         const signedTx = Transaction.new(
@@ -825,6 +768,8 @@ export default class App extends React.Component
             transactionWitnessSet,
             tx.auxiliary_data(),
         );
+
+        //(signedTx.body()).required_signers(stakeKeyHash);
 
         const result = await this.API.submitVoteDelegation(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(result)
@@ -934,8 +879,7 @@ export default class App extends React.Component
 
                                 />
                             </FormGroup>
-
-                            <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({ dRep_id : this.state.dRepIDBech32, stake_credential : this.state.stakeKey, metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash}) }>Delegate!</button>
+                            <button style={{padding: "10px"}} onClick={ () => this.buildSubmitMetadataTx({dRep_id : this.state.dRepIDBech32, stake_credential : this.state.stakeKey, metadata_url : this.state.cip95MetadataURL, metadata_hash : this.state.cip95MetadataHash}) }>Delegate!</button>
                         </div>
                     } />
                     <Tab id="2" title="2. Submit DRep Registration 👷‍♂️" panel={
