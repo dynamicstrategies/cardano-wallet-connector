@@ -1,5 +1,5 @@
 import React from 'react'
-import { Tab, Tabs, RadioGroup, Radio, FormGroup, InputGroup, NumericInput } from "@blueprintjs/core";
+import {Tab, Tabs, RadioGroup, Radio, FormGroup, InputGroup, NumericInput, Classes} from "@blueprintjs/core";
 import "../node_modules/@blueprintjs/core/lib/css/blueprint.css";
 import "../node_modules/@blueprintjs/icons/lib/css/blueprint-icons.css";
 import "../node_modules/normalize.css/normalize.css";
@@ -45,10 +45,11 @@ import {
     hash_transaction,
     hash_script_data,
     hash_plutus_data,
-    ScriptDataHash, Ed25519KeyHash, NativeScript, StakeCredential
+    ScriptDataHash, Ed25519KeyHash, NativeScript, Credential, UnitInterval, ExUnitPrices
 } from "@emurgo/cardano-serialization-lib-asmjs"
 import "./App.css";
 import {blake2b} from "blakejs";
+import classNames from "classnames";
 let Buffer = require('buffer/').Buffer
 let blake = require('blakejs')
 
@@ -60,16 +61,15 @@ export default class App extends React.Component
         super(props);
 
         this.state = {
-            selectedTabId: "1",
-            whichWalletSelected: undefined,
-            walletFound: false,
-            walletIsEnabled: false,
-            walletName: undefined,
-            walletIcon: undefined,
-            walletAPIVersion: undefined,
-            wallets: [],
 
+            namiFound: false,
+            eternlFound: false,
+            tmpWalletSelected: "eternl",
             networkId: undefined,
+            walletIsEnabled: false,
+            isOpen: false,
+
+            selectedTabId: "1",
             Utxos: undefined,
             CollatUtxos: undefined,
             balance: undefined,
@@ -102,13 +102,14 @@ export default class App extends React.Component
          * written to this API variable and all the other operations
          * run using this API object
          */
-        this.API = undefined;
+        this.walletObj = undefined;
 
         /**
          * Protocol parameters
          * @type {{
          * keyDeposit: string,
          * coinsPerUtxoWord: string,
+         * coinsPerUtxoSize: string,
          * minUtxo: string,
          * poolDeposit: string,
          * maxTxSize: number,
@@ -122,50 +123,173 @@ export default class App extends React.Component
                 minFeeA: "44",
                 minFeeB: "155381",
             },
-            minUtxo: "34482",
+            minUtxo: "4310",
             poolDeposit: "500000000",
             keyDeposit: "2000000",
             maxValSize: 5000,
             maxTxSize: 16384,
             priceMem: 0.0577,
             priceStep: 0.0000721,
-            coinsPerUtxoWord: "34482",
+            coinsPerUtxoWord: "34482", //deprecated
+            coinsPerUtxoSize: "4310"
         }
 
         this.pollWallets = this.pollWallets.bind(this);
     }
 
-    /**
-     * Poll the wallets it can read from the browser.
-     * Sometimes the html document loads before the browser initialized browser plugins (like Nami or Flint).
-     * So we try to poll the wallets 3 times (with 1 second in between each try).
-     *
-     * Note: CCVault and Eternl are the same wallet, Eternl is a rebrand of CCVault
-     * So both of these wallets as the Eternl injects itself twice to maintain
-     * backward compatibility
-     *
-     * @param count The current try count.
-     */
-    pollWallets = (count = 0) => {
-        const wallets = [];
-        for(const key in window.cardano) {
-            if (window.cardano[key].enable && wallets.indexOf(key) === -1) {
-                wallets.push(key);
-            }
+
+    handleWalletSelect = async (walletName) => {
+        try {
+            this.setState({tmpWalletSelected: walletName})
+        } catch (err) {
+            console.log(err)
         }
-        if (wallets.length === 0 && count < 3) {
-            setTimeout(() => {
-                this.pollWallets(count + 1);
-            }, 1000);
-            return;
-        }
-        this.setState({
-            wallets,
-            whichWalletSelected: wallets[0]
-        }, () => {
-            this.refreshData()
-        });
     }
+
+    /**
+     * Checks if the wallet is running in the browser
+     * Does this for Nami, eternl and Flint wallets
+     * @returns {boolean}
+     */
+    checkWhichWalletsFound = () => {
+        if (!!window?.cardano?.nami) this.setState({namiFound: true})
+        if (!!window?.cardano?.eternl) this.setState({eternlFound: true})
+    }
+
+
+    getChangeAddress = async () => {
+        try {
+            const rawAddress = await this.walletObj.getChangeAddress();
+            const changeAddress = Address.from_bytes(Buffer.from(rawAddress, "hex")).to_bech32()
+            this.setState(changeAddress)
+            console.log(`changeAddress: ${changeAddress}`)
+        } catch (err) {
+            console.log(err)
+        }
+    }
+
+    /**
+     * The collateral is need for working with Plutus Scripts
+     * Essentially you need to provide collateral to pay for fees if the
+     * script execution fails after the script has been validated...
+     * this should be an uncommon occurrence and would suggest the smart contract
+     * would have been incorrectly written.
+     * The amount of collateral to use is set in the wallet
+     * @returns {Promise<void>}
+     */
+    getCollateral = async () => {
+
+        let CollatUtxos = {
+            txHash: "",
+            txIndx: 0,
+            amountLovelace: 0,
+        };
+
+        try {
+
+            let collateral = [];
+
+            const wallet = this.state.tmpWalletSelected;
+            if (wallet === "nami") {
+                collateral = await this.walletObj.experimental.getCollateral();
+            } else {
+                collateral = await this.walletObj.getCollateral();
+            }
+
+
+            for (const x of collateral) {
+
+                const utxo = TransactionUnspentOutput.from_bytes(Buffer.from(x, "hex"));
+                const output = utxo.output();
+                const amountLovelace = output.amount().coin().to_str();
+
+                // pick collateral with the highest amount
+                if (amountLovelace > CollatUtxos.amountLovelace) {
+                    const input = utxo.input();
+                    CollatUtxos.txHash = Buffer.from(input.transaction_id().to_bytes(), "utf8").toString("hex");
+                    CollatUtxos.txIndx = input.index();
+                    CollatUtxos.amountLovelace = amountLovelace
+                }
+
+            }
+
+            console.log("Collateral:")
+            console.log(CollatUtxos)
+
+            this.setState(CollatUtxos);
+
+        } catch (err) {
+            console.log(err)
+        }
+
+    }
+
+    /**
+     * Enables the wallet that was chosen by the user
+     * When this executes the user should get a window pop-up
+     * from the wallet asking to approve the connection
+     * of this app to the wallet
+     * @returns {Promise<void>}
+     */
+    enableWallet = async (walletName) => {
+
+        try {
+            let walletObj = undefined;
+            // const wallet = this.globalState.CardanoWallet.get_whichWalletSelected;
+            if (walletName === "nami") {
+                walletObj = await window.cardano.nami.enable();
+            } else if (walletName === "eternl") {
+                walletObj = await window.cardano.eternl.enable();
+            }
+
+            this.walletObj = walletObj;
+
+            await this.checkIfWalletEnabled();
+            await this.getNetworkId();
+            await this.getChangeAddress();
+            await this.getCollateral();
+
+        } catch (err) {
+            console.log(err)
+        }
+    }
+
+    /**
+     * Checks if a connection has been established with
+     * the wallet
+     * @returns {Promise<boolean>}
+     */
+    checkIfWalletEnabled = async () => {
+
+        let walletIsEnabled = false;
+
+        try {
+            const wallet = this.state.tmpWalletSelected;
+            if (wallet === "nami") {
+                walletIsEnabled = await window.cardano.nami.isEnabled();
+            } else if (wallet === "eternl") {
+                walletIsEnabled = await window.cardano.eternl.isEnabled();
+            }
+
+            this.setState(walletIsEnabled)
+
+        } catch (err) {
+            console.log(err)
+        }
+
+        return walletIsEnabled
+    }
+
+
+    getWalletIconFromName = (walletName) => {
+
+        // if (walletName === "eternl") return <Image src="/images/eternl.svg" alt="eternl logo" layout="raw" height="25" width="25"/>
+        // if (walletName === "nami") return <Image src="/images/nami.svg" alt="nami logo" layout="raw" height="25" width="25"/>
+
+        return walletName
+
+    }
+
 
     /**
      * Handles the tab selection on the user form
@@ -173,18 +297,6 @@ export default class App extends React.Component
      */
     handleTabId = (tabId) => this.setState({selectedTabId: tabId})
 
-    /**
-     * Handles the radio buttons on the form that
-     * let the user choose which wallet to work with
-     * @param obj
-     */
-    handleWalletSelect = (obj) => {
-        const whichWalletSelected = obj.target.value
-        this.setState({whichWalletSelected},
-            () => {
-                this.refreshData()
-            })
-    }
 
     /**
      * Generate address from the plutus contract cborhex
@@ -200,8 +312,8 @@ export default class App extends React.Component
         const blake2bhash = "67f33146617a5e61936081db3b2117cbf59bd2123748f58ac9678656";
         const scripthash = ScriptHash.from_bytes(Buffer.from(blake2bhash,"hex"));
 
-        const cred = StakeCredential.from_scripthash(scripthash);
-        const networkId = NetworkInfo.testnet().network_id();
+        const cred = Credential.from_scripthash(scripthash);
+        const networkId = NetworkInfo.testnet_preview().network_id();
         const baseAddr = EnterpriseAddress.new(networkId, cred);
         const addr = baseAddr.to_address();
         const addrBech32 = addr.to_bech32();
@@ -219,80 +331,7 @@ export default class App extends React.Component
 
     }
 
-    /**
-     * Checks if the wallet is running in the browser
-     * Does this for Nami, Eternl and Flint wallets
-     * @returns {boolean}
-     */
 
-    checkIfWalletFound = () => {
-        const walletKey = this.state.whichWalletSelected;
-        const walletFound = !!window?.cardano?.[walletKey];
-        this.setState({walletFound})
-        return walletFound;
-    }
-
-    /**
-     * Checks if a connection has been established with
-     * the wallet
-     * @returns {Promise<boolean>}
-     */
-    checkIfWalletEnabled = async () => {
-        let walletIsEnabled = false;
-
-        try {
-            const walletName = this.state.whichWalletSelected;
-            walletIsEnabled = await window.cardano[walletName].isEnabled();
-        } catch (err) {
-            console.log(err)
-        }
-        this.setState({walletIsEnabled});
-
-        return walletIsEnabled;
-    }
-
-    /**
-     * Enables the wallet that was chosen by the user
-     * When this executes the user should get a window pop-up
-     * from the wallet asking to approve the connection
-     * of this app to the wallet
-     * @returns {Promise<boolean>}
-     */
-
-    enableWallet = async () => {
-        const walletKey = this.state.whichWalletSelected;
-        try {
-            this.API = await window.cardano[walletKey].enable();
-        } catch(err) {
-            console.log(err);
-        }
-        return this.checkIfWalletEnabled();
-    }
-
-    /**
-     * Get the API version used by the wallets
-     * writes the value to state
-     * @returns {*}
-     */
-    getAPIVersion = () => {
-        const walletKey = this.state.whichWalletSelected;
-        const walletAPIVersion = window?.cardano?.[walletKey].apiVersion;
-        this.setState({walletAPIVersion})
-        return walletAPIVersion;
-    }
-
-    /**
-     * Get the name of the wallet (nami, eternl, flint)
-     * and store the name in the state
-     * @returns {*}
-     */
-
-    getWalletName = () => {
-        const walletKey = this.state.whichWalletSelected;
-        const walletName = window?.cardano?.[walletKey].name;
-        this.setState({walletName})
-        return walletName;
-    }
 
     /**
      * Gets the Network ID to which the wallet is connected
@@ -303,7 +342,7 @@ export default class App extends React.Component
      */
     getNetworkId = async () => {
         try {
-            const networkId = await this.API.getNetworkId();
+            const networkId = await this.walletObj.getNetworkId();
             this.setState({networkId})
 
         } catch (err) {
@@ -322,7 +361,7 @@ export default class App extends React.Component
         let Utxos = [];
 
         try {
-            const rawUtxos = await this.API.getUtxos();
+            const rawUtxos = await this.walletObj.getUtxos();
 
             for (const rawUtxo of rawUtxos) {
                 const utxo = TransactionUnspentOutput.from_bytes(Buffer.from(rawUtxo, "hex"));
@@ -379,41 +418,6 @@ export default class App extends React.Component
         }
     }
 
-    /**
-     * The collateral is need for working with Plutus Scripts
-     * Essentially you need to provide collateral to pay for fees if the
-     * script execution fails after the script has been validated...
-     * this should be an uncommon occurrence and would suggest the smart contract
-     * would have been incorrectly written.
-     * The amount of collateral to use is set in the wallet
-     * @returns {Promise<void>}
-     */
-    getCollateral = async () => {
-
-        let CollatUtxos = [];
-
-        try {
-
-            let collateral = [];
-
-            const wallet = this.state.whichWalletSelected;
-            if (wallet === "nami") {
-                collateral = await this.API.experimental.getCollateral();
-            } else {
-                collateral = await this.API.getCollateral();
-            }
-
-            for (const x of collateral) {
-                const utxo = TransactionUnspentOutput.from_bytes(Buffer.from(x, "hex"));
-                CollatUtxos.push(utxo)
-                // console.log(utxo)
-            }
-            this.setState({CollatUtxos})
-        } catch (err) {
-            console.log(err)
-        }
-
-    }
 
     /**
      * Gets the current balance of in Lovelace in the user's wallet
@@ -423,7 +427,7 @@ export default class App extends React.Component
      */
     getBalance = async () => {
         try {
-            const balanceCBORHex = await this.API.getBalance();
+            const balanceCBORHex = await this.walletObj.getBalance();
 
             const balance = Value.from_bytes(Buffer.from(balanceCBORHex, "hex")).coin().to_str();
             this.setState({balance})
@@ -440,7 +444,7 @@ export default class App extends React.Component
      */
     getChangeAddress = async () => {
         try {
-            const raw = await this.API.getChangeAddress();
+            const raw = await this.walletObj.getChangeAddress();
             const changeAddress = Address.from_bytes(Buffer.from(raw, "hex")).to_bech32()
             this.setState({changeAddress})
         } catch (err) {
@@ -455,7 +459,7 @@ export default class App extends React.Component
     getRewardAddresses = async () => {
 
         try {
-            const raw = await this.API.getRewardAddresses();
+            const raw = await this.walletObj.getRewardAddresses();
             const rawFirst = raw[0];
             const rewardAddress = Address.from_bytes(Buffer.from(rawFirst, "hex")).to_bech32()
             // console.log(rewardAddress)
@@ -473,7 +477,7 @@ export default class App extends React.Component
     getUsedAddresses = async () => {
 
         try {
-            const raw = await this.API.getUsedAddresses();
+            const raw = await this.walletObj.getUsedAddresses();
             const rawFirst = raw[0];
             const usedAddress = Address.from_bytes(Buffer.from(rawFirst, "hex")).to_bech32()
             // console.log(rewardAddress)
@@ -552,13 +556,21 @@ export default class App extends React.Component
 
         const txBuilder = TransactionBuilder.new(
             TransactionBuilderConfigBuilder.new()
-                .fee_algo(LinearFee.new(BigNum.from_str(this.protocolParams.linearFee.minFeeA), BigNum.from_str(this.protocolParams.linearFee.minFeeB)))
+                .fee_algo(LinearFee.new(
+                    BigNum.from_str(this.protocolParams.linearFee.minFeeA),
+                    BigNum.from_str(this.protocolParams.linearFee.minFeeB)
+                ))
                 .pool_deposit(BigNum.from_str(this.protocolParams.poolDeposit))
                 .key_deposit(BigNum.from_str(this.protocolParams.keyDeposit))
-                .coins_per_utxo_word(BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+                // .coins_per_utxo_word(BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+                .coins_per_utxo_byte(BigNum.from_str(this.protocolParams.coinsPerUtxoSize))
                 .max_value_size(this.protocolParams.maxValSize)
                 .max_tx_size(this.protocolParams.maxTxSize)
                 .prefer_pure_change(true)
+                .ex_unit_prices(ExUnitPrices.new(
+                    UnitInterval.new(BigNum.from_str("577"), BigNum.from_str("10000")),
+                    UnitInterval.new(BigNum.from_str("721"), BigNum.from_str("8200000")))
+                )
                 .build()
         );
 
@@ -621,7 +633,7 @@ export default class App extends React.Component
             TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
         )
 
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        let txVkeyWitnesses = await this.walletObj.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
 
         console.log(txVkeyWitnesses)
 
@@ -635,7 +647,7 @@ export default class App extends React.Component
         );
 
 
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        const submittedTxHash = await this.walletObj.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
         this.setState({submittedTxHash});
 
@@ -692,7 +704,7 @@ export default class App extends React.Component
             TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
         )
 
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        let txVkeyWitnesses = await this.walletObj.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
@@ -702,7 +714,7 @@ export default class App extends React.Component
             transactionWitnessSet
         );
 
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        const submittedTxHash = await this.walletObj.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
         this.setState({submittedTxHash});
 
@@ -752,7 +764,7 @@ export default class App extends React.Component
             TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
         )
 
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        let txVkeyWitnesses = await this.walletObj.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
@@ -762,7 +774,7 @@ export default class App extends React.Component
             transactionWitnessSet
         );
 
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        const submittedTxHash = await this.walletObj.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
         this.setState({submittedTxHash: submittedTxHash, transactionIdLocked: submittedTxHash, lovelaceLocked: this.state.lovelaceToSend});
 
@@ -827,7 +839,7 @@ export default class App extends React.Component
             TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
         )
 
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        let txVkeyWitnesses = await this.walletObj.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
@@ -837,7 +849,7 @@ export default class App extends React.Component
             transactionWitnessSet
         );
 
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        const submittedTxHash = await this.walletObj.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
         this.setState({submittedTxHash: submittedTxHash, transactionIdLocked: submittedTxHash, lovelaceLocked: this.state.lovelaceToSend})
 
@@ -974,7 +986,7 @@ export default class App extends React.Component
             TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
         )
 
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        let txVkeyWitnesses = await this.walletObj.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
@@ -984,7 +996,7 @@ export default class App extends React.Component
             transactionWitnessSet
         );
 
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        const submittedTxHash = await this.walletObj.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
         this.setState({submittedTxHash});
 
@@ -1128,7 +1140,7 @@ export default class App extends React.Component
             TransactionWitnessSet.from_bytes(transactionWitnessSet.to_bytes())
         )
 
-        let txVkeyWitnesses = await this.API.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
+        let txVkeyWitnesses = await this.walletObj.signTx(Buffer.from(tx.to_bytes(), "utf8").toString("hex"), true);
         txVkeyWitnesses = TransactionWitnessSet.from_bytes(Buffer.from(txVkeyWitnesses, "hex"));
 
         transactionWitnessSet.set_vkeys(txVkeyWitnesses.vkeys());
@@ -1138,7 +1150,7 @@ export default class App extends React.Component
             transactionWitnessSet
         );
 
-        const submittedTxHash = await this.API.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
+        const submittedTxHash = await this.walletObj.submitTx(Buffer.from(signedTx.to_bytes(), "utf8").toString("hex"));
         console.log(submittedTxHash)
         this.setState({submittedTxHash});
 
@@ -1146,7 +1158,10 @@ export default class App extends React.Component
 
 
     async componentDidMount() {
-        this.pollWallets();
+        // this.pollWallets();
+
+        this.checkWhichWalletsFound();
+
         await this.refreshData();
     }
 
@@ -1159,34 +1174,95 @@ export default class App extends React.Component
 
 
                 <h1>Boilerplate DApp connector to Wallet</h1>
-                <div style={{paddingTop: "10px"}}>
-                    <div style={{marginBottom: 15}}>Select wallet:</div>
-                    <RadioGroup
-                        onChange={this.handleWalletSelect}
-                        selectedValue={this.state.whichWalletSelected}
-                        inline={true}
-                        className="wallets-wrapper"
+
+                <div className="ud-flex ud-place-content-end">
+                    <a
+                        className={`ud-flex hover:ud-no-underline ud-whitespace-nowrap ud-items-center ud-justify-between ud-rounded-md ud-py-4 ud-px-8 ud-border ud-border-dark ud-text-base ud-font-semibold ud-text-dark ud-transition-all hover:ud-border-mid-blue hover:ud-bg-primary hover:ud-text-mid-blue ${this.globalState.CardanoWallet.get_walletIsEnabled ? "" : ""}`}
+                        onClick={() => {this.setState({isOpen: !this.state.isOpen});}}
                     >
-                        { this.state.wallets.map(key =>
-                            <Radio
-                                key={key}
-                                className="wallet-label"
-                                value={key}>
-                                <img src={window.cardano[key].icon} width={24} height={24} alt={key}/>
-                                {window.cardano[key].name} ({key})
-                            </Radio>
-                        )}
-                    </RadioGroup>
+                        {this.state.walletIsEnabled
+                            ? <div className="ud-flex ud-flex-nowrap ud-items-center"><span className="ud-mr-4">Connected to</span>{this.getWalletIconFromName(this.state.tmpWalletSelected)}</div>
+                            : "Connect Wallet"}
+                    </a>
                 </div>
 
+                <Overlay
+                    className={classNames(Classes.OVERLAY_SCROLL_CONTAINER, "docs-overlay-example-transition", "ud-mt-28 ud-w-1/4 ud-mx-auto")}
+                    hasBackdrop={true}
+                    isOpen={this.state.isOpen}
+                    usePortal={true}
+                    autoFocus={true}
+                    useTallContent={false}
+                    onClose={() => {this.setState({isOpen: !this.state.isOpen})}}
+                >
+                    <div className={classNames(Classes.CARD, Classes.ELEVATION_4)}>
+                        <H3>Select Wallet to Connect</H3>
+                        <p>
+                            Choose which wallet you want to connect to. You will then be able to interact with DApp. If you don&apos;t have a wallet installed then you will need to install one of these - Nami, Eternl or Flint
+                        </p>
+                        <div style={{marginTop: "20px"}}>
+                            {/*<RadioGroup*/}
+                            {/*    label="Select Wallet:"*/}
+                            {/*    onChange={this.handleWalletSelect}*/}
+                            {/*    selectedValue={this.state.tmpWalletSelected}*/}
+                            {/*    inline={false}*/}
+                            {/*>*/}
+                            {/*    <Radio label={this.state.namiFound ? "Nami (found)" : "Nami (not found)"} value="nami" />*/}
+                            {/*    <Radio label={this.state.eternlFound ? "Eternl (found)" : "Eternl (not found)"}  value="eternl" />*/}
+                            {/*    <Radio label={this.state.flintFound ? "Flint (found)" : "Flint (not found)"} value="flint" />*/}
+                            {/*</RadioGroup>*/}
+
+                            <div
+                                className={
+                                    this.state.namiFound
+                                        ? this.state.tmpWalletSelected === "nami"
+                                            ? "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border-t ud-border-x ud-border-gray-300 ud-bg-blue-50"
+                                            : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border-t ud-border-x ud-border-gray-300 hover:ud-bg-blue-50"
+                                        : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border-t ud-border-x ud-border-gray-300 ud-bg-gray-100 ud-text-gray-500"
+                                }
+                                onClick={() => {
+                                    this.state.namiFound ? this.handleWalletSelect("nami") : null}}
+                            >
+                                <div className="ud-flex-grow">Nami</div>
+                                {!this.state.namiFound && <div className="ud-flex-shrink"><span className="ud-py-1 ud-px-2 ud-bg-primary ud-text-dark ud-rounded-md ud-text-xs">not found</span></div>}
+                                <Image src="/images/nami.svg" alt="nami logo" layout="raw" height="30" width="30"/>
+                            </div>
+
+                            <div
+                                className={
+                                    this.state.eternlFound
+                                        ? this.state.tmpWalletSelected === "eternl"
+                                            ? "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border ud-border-gray-300 ud-bg-blue-50"
+                                            : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border ud-border-gray-300 hover:ud-bg-blue-50"
+                                        : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border ud-border-gray-300 ud-bg-gray-100 ud-text-gray-500"
+                                }
+                                onClick={() => {this.state.eternlFound ? this.handleWalletSelect("eternl") : null}}
+                            >
+                                <div className="ud-flex-grow">Eternl</div>
+                                {!this.state.eternlFound && <div className="ud-flex-shrink"><span className="ud-py-1 ud-px-2 ud-bg-primary ud-text-dark ud-rounded-md ud-text-xs">not found</span></div>}
+                                <Image src="/images/eternl.svg" alt="nami logo" layout="raw" height="30" width="30"/>
+                            </div>
 
 
-                <button style={{padding: "20px"}} onClick={this.refreshData}>Refresh</button>
 
-                <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>Wallet Found: </span>{`${this.state.walletFound}`}</p>
+                        </div>
+                        <p className={"ud-my-8"}>{`${this.printNetworkIdString()}`}</p>
+                        <Button intent={Intent.PRIMARY}
+                                onClick={() => {
+                                    this.globalState.CardanoWallet.set_whichWalletSelected(this.state.tmpWalletSelected)
+                                    this.enableWallet(this.state.tmpWalletSelected);
+                                    this.setState({isOpen: !this.state.isOpen});
+                                }}
+                                style={{ marginTop: "4px" }}>
+                            Select
+                        </Button>
+                    </div>
+                </Overlay>
+
+
+
+                <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>Wallet Found: </span>{`${this.state.namiFound || this.state.eternlFound}`}</p>
                 <p><span style={{fontWeight: "bold"}}>Wallet Connected: </span>{`${this.state.walletIsEnabled}`}</p>
-                <p><span style={{fontWeight: "bold"}}>Wallet API version: </span>{this.state.walletAPIVersion}</p>
-                <p><span style={{fontWeight: "bold"}}>Wallet name: </span>{this.state.walletName}</p>
 
                 <p><span style={{fontWeight: "bold"}}>Network Id (0 = testnet; 1 = mainnet): </span>{this.state.networkId}</p>
                 <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>UTXOs: (UTXO #txid = ADA amount + AssetAmount + policyId.AssetName + ...): </span>{this.state.Utxos?.map(x => <li style={{fontSize: "10px"}} key={`${x.str}${x.multiAssetStr}`}>{`${x.str}${x.multiAssetStr}`}</li>)}</p>
