@@ -1,5 +1,16 @@
 import React from 'react'
-import {Tab, Tabs, RadioGroup, Radio, FormGroup, InputGroup, NumericInput, Classes} from "@blueprintjs/core";
+import {
+    Tab,
+    Tabs,
+    RadioGroup,
+    Radio,
+    FormGroup,
+    InputGroup,
+    NumericInput,
+    Classes,
+    Overlay,
+    H3, Button, Intent
+} from "@blueprintjs/core";
 import "../node_modules/@blueprintjs/core/lib/css/blueprint.css";
 import "../node_modules/@blueprintjs/icons/lib/css/blueprint-icons.css";
 import "../node_modules/normalize.css/normalize.css";
@@ -45,13 +56,17 @@ import {
     hash_transaction,
     hash_script_data,
     hash_plutus_data,
-    ScriptDataHash, Ed25519KeyHash, NativeScript, Credential, UnitInterval, ExUnitPrices
+    ScriptDataHash, Ed25519KeyHash, NativeScript, Credential, UnitInterval, ExUnitPrices, DataCost
 } from "@emurgo/cardano-serialization-lib-asmjs"
 import "./App.css";
 import {blake2b} from "blakejs";
 import classNames from "classnames";
+import namiLogo from './nami.svg';
+import eternlLogo from './eternl.svg';
+
 let Buffer = require('buffer/').Buffer
 let blake = require('blakejs')
+
 
 
 export default class App extends React.Component
@@ -82,11 +97,11 @@ export default class App extends React.Component
             txBodyCborHex_signed: "",
             submittedTxHash: "",
 
-            addressBech32SendADA: "addr_test1qrt7j04dtk4hfjq036r2nfewt59q8zpa69ax88utyr6es2ar72l7vd6evxct69wcje5cs25ze4qeshejy828h30zkydsu4yrmm",
+            addressBech32SendADA: "addr_test1qp055n0uynlr4362xejac7qq2tv2rcqalqqtn39h5mfv8zuc85y96hdkqtarg95gewuezjvkw8zt530tnmglhrzccdds6v97sf",
             lovelaceToSend: 3000000,
-            assetNameHex: "4c494645",
-            assetPolicyIdHex: "ae02017105527c6c0c9840397a39cc5ca39fabe5b9998ba70fda5f2f",
-            assetAmountToSend: 5,
+            assetNameHex: "4453494f20546f6b656e2031",
+            assetPolicyIdHex: "f843dd6264ebcc54457b24addbcb83861cc1dbc82b5dd73708a4b1e4",
+            assetAmountToSend: 1,
             addressScriptBech32: "addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8",
             datumStr: "12345678",
             plutusScriptCborHex: "4e4d01000033222220051200120011",
@@ -134,7 +149,6 @@ export default class App extends React.Component
             coinsPerUtxoSize: "4310"
         }
 
-        this.pollWallets = this.pollWallets.bind(this);
     }
 
 
@@ -154,18 +168,6 @@ export default class App extends React.Component
     checkWhichWalletsFound = () => {
         if (!!window?.cardano?.nami) this.setState({namiFound: true})
         if (!!window?.cardano?.eternl) this.setState({eternlFound: true})
-    }
-
-
-    getChangeAddress = async () => {
-        try {
-            const rawAddress = await this.walletObj.getChangeAddress();
-            const changeAddress = Address.from_bytes(Buffer.from(rawAddress, "hex")).to_bech32()
-            this.setState(changeAddress)
-            console.log(`changeAddress: ${changeAddress}`)
-        } catch (err) {
-            console.log(err)
-        }
     }
 
     /**
@@ -248,6 +250,10 @@ export default class App extends React.Component
             await this.getNetworkId();
             await this.getChangeAddress();
             await this.getCollateral();
+            await this.getBalance();
+            await this.getRewardAddresses();
+            await this.getUsedAddresses();
+            await this.getUtxos();
 
         } catch (err) {
             console.log(err)
@@ -271,7 +277,7 @@ export default class App extends React.Component
                 walletIsEnabled = await window.cardano.eternl.isEnabled();
             }
 
-            this.setState(walletIsEnabled)
+            this.setState({walletIsEnabled})
 
         } catch (err) {
             console.log(err)
@@ -280,22 +286,11 @@ export default class App extends React.Component
         return walletIsEnabled
     }
 
-
     getWalletIconFromName = (walletName) => {
-
-        // if (walletName === "eternl") return <Image src="/images/eternl.svg" alt="eternl logo" layout="raw" height="25" width="25"/>
-        // if (walletName === "nami") return <Image src="/images/nami.svg" alt="nami logo" layout="raw" height="25" width="25"/>
-
-        return walletName
-
+        if (walletName === "eternl") return <img src={eternlLogo} alt="eternl logo" height="25" width="25"/>
+        if (walletName === "nami") return <img src={namiLogo} alt="nami logo" height="25" width="25"/>
     }
 
-
-    /**
-     * Handles the tab selection on the user form
-     * @param tabId
-     */
-    handleTabId = (tabId) => this.setState({selectedTabId: tabId})
 
 
     /**
@@ -356,6 +351,7 @@ export default class App extends React.Component
      * @returns {Promise<void>}
      */
 
+
     getUtxos = async () => {
 
         let Utxos = [];
@@ -368,6 +364,7 @@ export default class App extends React.Component
                 const input = utxo.input();
                 const txid = Buffer.from(input.transaction_id().to_bytes(), "utf8").toString("hex");
                 const txindx = input.index();
+
                 const output = utxo.output();
                 const amount = output.amount().coin().to_str(); // ADA amount in lovelace
                 const multiasset = output.amount().multiasset();
@@ -413,6 +410,7 @@ export default class App extends React.Component
                 // console.log(`utxo: ${str}`)
             }
             this.setState({Utxos})
+            console.log(Utxos)
         } catch (err) {
             console.log(err)
         }
@@ -489,62 +487,11 @@ export default class App extends React.Component
     }
 
     /**
-     * Refresh all the data from the user's wallet
-     * @returns {Promise<void>}
+     * Handles the tab selection on the user form
+     * @param tabId
      */
-    refreshData = async () => {
-        this.generateScriptAddress()
+    handleTabId = (tabId) => this.setState({selectedTabId: tabId})
 
-        try{
-            const walletFound = this.checkIfWalletFound();
-            if (walletFound) {
-                await this.getAPIVersion();
-                await this.getWalletName();
-                const walletEnabled = await this.enableWallet();
-                if (walletEnabled) {
-                    await this.getNetworkId();
-                    await this.getUtxos();
-                    await this.getCollateral();
-                    await this.getBalance();
-                    await this.getChangeAddress();
-                    await this.getRewardAddresses();
-                    await this.getUsedAddresses();
-                } else {
-                    await this.setState({
-                        Utxos: null,
-                        CollatUtxos: null,
-                        balance: null,
-                        changeAddress: null,
-                        rewardAddress: null,
-                        usedAddress: null,
-
-                        txBody: null,
-                        txBodyCborHex_unsigned: "",
-                        txBodyCborHex_signed: "",
-                        submittedTxHash: "",
-                    });
-                }
-            } else {
-                await this.setState({
-                    walletIsEnabled: false,
-
-                    Utxos: null,
-                    CollatUtxos: null,
-                    balance: null,
-                    changeAddress: null,
-                    rewardAddress: null,
-                    usedAddress: null,
-
-                    txBody: null,
-                    txBodyCborHex_unsigned: "",
-                    txBodyCborHex_signed: "",
-                    submittedTxHash: "",
-                });
-            }
-        } catch (err) {
-            console.log(err)
-        }
-    }
 
     /**
      * Every transaction starts with initializing the
@@ -654,7 +601,6 @@ export default class App extends React.Component
 
     }
 
-
     buildSendTokenTransaction = async () => {
 
         const txBuilder = await this.initTransactionBuilder();
@@ -676,7 +622,8 @@ export default class App extends React.Component
             assets
         );
 
-        txOutputBuilder = txOutputBuilder.with_asset_and_min_required_coin(multiAsset, BigNum.from_str(this.protocolParams.coinsPerUtxoWord))
+        let data_cost = DataCost.new_coins_per_byte(BigNum.from_str(this.protocolParams.coinsPerUtxoSize))
+        txOutputBuilder = txOutputBuilder.with_asset_and_min_required_coin_by_utxo_cost(multiAsset, data_cost)
         const txOutput = txOutputBuilder.build();
 
         txBuilder.add_output(txOutput)
@@ -722,8 +669,6 @@ export default class App extends React.Component
         // this.setState({txBodyCborHex_unsigned, txBody})
 
     }
-
-
 
     buildSendAdaToPlutusScript = async () => {
 
@@ -854,9 +799,6 @@ export default class App extends React.Component
         this.setState({submittedTxHash: submittedTxHash, transactionIdLocked: submittedTxHash, lovelaceLocked: this.state.lovelaceToSend})
 
     }
-
-
-
 
     buildRedeemAdaFromPlutusScript = async () => {
 
@@ -1158,11 +1100,8 @@ export default class App extends React.Component
 
 
     async componentDidMount() {
-        // this.pollWallets();
-
         this.checkWhichWalletsFound();
-
-        await this.refreshData();
+        // await this.refreshData();
     }
 
     render()
@@ -1175,9 +1114,9 @@ export default class App extends React.Component
 
                 <h1>Boilerplate DApp connector to Wallet</h1>
 
-                <div className="ud-flex ud-place-content-end">
+                <div className="ud-flex">
                     <a
-                        className={`ud-flex hover:ud-no-underline ud-whitespace-nowrap ud-items-center ud-justify-between ud-rounded-md ud-py-4 ud-px-8 ud-border ud-border-dark ud-text-base ud-font-semibold ud-text-dark ud-transition-all hover:ud-border-mid-blue hover:ud-bg-primary hover:ud-text-mid-blue ${this.globalState.CardanoWallet.get_walletIsEnabled ? "" : ""}`}
+                        className={`ud-flex hover:ud-no-underline ud-whitespace-nowrap ud-items-center ud-justify-between ud-rounded-md ud-py-4 ud-px-8 ud-border ud-border-dark ud-text-base ud-font-semibold ud-text-dark ud-transition-all hover:ud-border-mid-blue hover:ud-bg-primary hover:ud-text-mid-blue`}
                         onClick={() => {this.setState({isOpen: !this.state.isOpen});}}
                     >
                         {this.state.walletIsEnabled
@@ -1198,7 +1137,7 @@ export default class App extends React.Component
                     <div className={classNames(Classes.CARD, Classes.ELEVATION_4)}>
                         <H3>Select Wallet to Connect</H3>
                         <p>
-                            Choose which wallet you want to connect to. You will then be able to interact with DApp. If you don&apos;t have a wallet installed then you will need to install one of these - Nami, Eternl or Flint
+                            Choose which wallet you want to connect to. You will then be able to interact with DApp. If you don&apos;t have a wallet installed then you will need to install one of these - Nami or Eternl
                         </p>
                         <div style={{marginTop: "20px"}}>
                             {/*<RadioGroup*/}
@@ -1220,12 +1159,12 @@ export default class App extends React.Component
                                             : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border-t ud-border-x ud-border-gray-300 hover:ud-bg-blue-50"
                                         : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border-t ud-border-x ud-border-gray-300 ud-bg-gray-100 ud-text-gray-500"
                                 }
-                                onClick={() => {
-                                    this.state.namiFound ? this.handleWalletSelect("nami") : null}}
+                                onClick={() => this.state.namiFound ? this.handleWalletSelect("nami") : null}
+                                // onClick={() => {}}
                             >
                                 <div className="ud-flex-grow">Nami</div>
                                 {!this.state.namiFound && <div className="ud-flex-shrink"><span className="ud-py-1 ud-px-2 ud-bg-primary ud-text-dark ud-rounded-md ud-text-xs">not found</span></div>}
-                                <Image src="/images/nami.svg" alt="nami logo" layout="raw" height="30" width="30"/>
+                                <img src={namiLogo} alt="nami logo" height="25" width="25"/>
                             </div>
 
                             <div
@@ -1236,21 +1175,20 @@ export default class App extends React.Component
                                             : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border ud-border-gray-300 hover:ud-bg-blue-50"
                                         : "ud-flex ud-flex-row ud-justify-between ud-items-center ud-gap-x-2 ud-p-4 ud-border ud-border-gray-300 ud-bg-gray-100 ud-text-gray-500"
                                 }
-                                onClick={() => {this.state.eternlFound ? this.handleWalletSelect("eternl") : null}}
+                                onClick={() => this.state.eternlFound ? this.handleWalletSelect("eternl") : null}
                             >
                                 <div className="ud-flex-grow">Eternl</div>
                                 {!this.state.eternlFound && <div className="ud-flex-shrink"><span className="ud-py-1 ud-px-2 ud-bg-primary ud-text-dark ud-rounded-md ud-text-xs">not found</span></div>}
-                                <Image src="/images/eternl.svg" alt="nami logo" layout="raw" height="30" width="30"/>
+                                <img src={eternlLogo} alt="eternl logo" height="25" width="25"/>
                             </div>
 
 
 
                         </div>
-                        <p className={"ud-my-8"}>{`${this.printNetworkIdString()}`}</p>
+                        <p className={"ud-my-8"}>{`network id: ${this.state.networkId}`}</p>
                         <Button intent={Intent.PRIMARY}
                                 onClick={() => {
-                                    this.globalState.CardanoWallet.set_whichWalletSelected(this.state.tmpWalletSelected)
-                                    this.enableWallet(this.state.tmpWalletSelected);
+                                    this.enableWallet(this.state.tmpWalletSelected).then(r => {});
                                     this.setState({isOpen: !this.state.isOpen});
                                 }}
                                 style={{ marginTop: "4px" }}>
@@ -1262,10 +1200,9 @@ export default class App extends React.Component
 
 
                 <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>Wallet Found: </span>{`${this.state.namiFound || this.state.eternlFound}`}</p>
-                <p><span style={{fontWeight: "bold"}}>Wallet Connected: </span>{`${this.state.walletIsEnabled}`}</p>
+                <p><span style={{fontWeight: "bold"}}>Wallet Enabled: </span>{`${this.state.walletIsEnabled}`}</p>
 
                 <p><span style={{fontWeight: "bold"}}>Network Id (0 = testnet; 1 = mainnet): </span>{this.state.networkId}</p>
-                <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>UTXOs: (UTXO #txid = ADA amount + AssetAmount + policyId.AssetName + ...): </span>{this.state.Utxos?.map(x => <li style={{fontSize: "10px"}} key={`${x.str}${x.multiAssetStr}`}>{`${x.str}${x.multiAssetStr}`}</li>)}</p>
                 <p style={{paddingTop: "20px"}}><span style={{fontWeight: "bold"}}>Balance: </span>{this.state.balance}</p>
                 <p><span style={{fontWeight: "bold"}}>Change Address: </span>{this.state.changeAddress}</p>
                 <p><span style={{fontWeight: "bold"}}>Staking Address: </span>{this.state.rewardAddress}</p>
